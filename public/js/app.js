@@ -1,5 +1,5 @@
 /**
- * PolyCompile — Main Application Controller v2 (Multi-Line Interactive Terminal)
+ * PolyCompile — Main Application Controller v2 (Clean Terminal & Multi-line Stdin)
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -352,21 +352,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* =========================================================
-     MULTI-LINE INTERACTIVE TERMINAL
+     SEAMLESS TERMINAL & MULTI-LINE INPUT EXECUTION
   ========================================================= */
-  let terminalScreen = null;
-  let collectedInputs = [];
-  let lastSourceCode = '';
-  let lastLanguageId = '';
-
-  function resetTerminal() {
-    consoleOutput.innerHTML = '';
-    terminalScreen = document.createElement('div');
-    terminalScreen.className = 'programiz-terminal';
-    terminalScreen.style.cssText = 'font-family: Consolas, "Courier New", monospace; white-space: pre-wrap; line-height: 1.6; font-size: 14px; color: #c9d1d9;';
-    consoleOutput.appendChild(terminalScreen);
-  }
-
   function resolveLanguage(code, selectVal) {
     if (selectVal && selectVal !== 'auto') return selectVal;
     if (code.includes('input(') || code.includes('def ') || code.includes('print(')) return 'python';
@@ -394,145 +381,64 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.innerWidth <= 900) setResponsiveView('output');
     switchTab('consoleTab');
     hideAllBanners();
-    resetTerminal();
 
-    lastSourceCode = sourceCode;
-    lastLanguageId = resolveLanguage(sourceCode, languageSelect.value);
-    collectedInputs = [];
+    const selectedLanguage = resolveLanguage(sourceCode, languageSelect.value);
 
-    // Check if code requires inputs
+    // Check if the program requests any inputs
     const requiresInput = /(?:input\s*\(|scanf\s*\(|cin\s*>>|readLine|Scanner|gets\s*\(|fgets\s*\()/i.test(sourceCode);
 
     if (requiresInput) {
-      // Find initial prompt text if present
-      let firstPrompt = '';
-      const pyMatch = sourceCode.match(/input\s*\(\s*["']([^"']*)["']\s*\)/);
-      const cMatch  = sourceCode.match(/printf\s*\(\s*["']([^"']+)["']\s*\)/);
+      // Build standard input terminal box (clean, no prompt duplication)
+      consoleOutput.innerHTML = `
+        <div class="terminal-clean-box" style="font-family: Consolas, 'Courier New', monospace; font-size: 14px; line-height: 1.6; color: #c9d1d9;">
+          <div style="color: #58a6ff; font-size: 13px; margin-bottom: 8px;">
+            <i class="fa-solid fa-keyboard" style="margin-right: 5px;"></i> Program requires input. Enter all input lines below (1 or 100+ lines):
+          </div>
+          <textarea id="terminalStdinTextarea" spellcheck="false" placeholder="Enter input here (each on a new line)..." style="width: 100%; min-height: 150px; background: #0d1117; color: #3fb950; font-family: inherit; font-size: inherit; border: 1px solid #30363d; border-radius: 6px; padding: 10px; outline: none; resize: vertical;"></textarea>
+          <div style="margin-top: 10px;">
+            <button id="terminalSubmitRunBtn" style="background: #238636; color: #fff; border: none; padding: 6px 18px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px;">
+              <i class="fa-solid fa-play" style="margin-right: 5px;"></i> Run with Input
+            </button>
+          </div>
+        </div>
+      `;
 
-      if (pyMatch && pyMatch[1]) firstPrompt = pyMatch[1];
-      else if (cMatch && cMatch[1]) firstPrompt = cMatch[1];
+      const textarea = document.getElementById('terminalStdinTextarea');
+      const submitBtn = document.getElementById('terminalSubmitRunBtn');
 
-      // Add a helpful top toolbar inside the console
-      const hintBar = document.createElement('div');
-      hintBar.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:#161b22; padding:4px 8px; border-radius:4px; margin-bottom:8px; font-size:12px; color:#8b949e; border:1px solid #30363d;';
-      hintBar.innerHTML = `<span><i class="fa-solid fa-terminal" style="color:#58a6ff; margin-right:5px;"></i>Type inputs line by line (or paste multiple). Press <b>Enter on empty line</b> or click Run:</span>`;
+      textarea.focus();
 
-      const submitBtn = document.createElement('button');
-      submitBtn.innerHTML = '<i class="fa-solid fa-play"></i> Run Code';
-      submitBtn.style.cssText = 'background:#238636; color:#fff; border:none; padding:2px 10px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;';
+      // Submit on clicking the Run button
       submitBtn.addEventListener('click', () => {
-        executeWithAllInputs();
+        const stdinVal = textarea.value;
+        startExecution(sourceCode, selectedLanguage, stdinVal);
       });
-      hintBar.appendChild(submitBtn);
-      terminalScreen.appendChild(hintBar);
 
-      // Start the interactive input loop
-      promptNextInputLine(firstPrompt);
+      // Submit on Ctrl+Enter from textarea
+      textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          const stdinVal = textarea.value;
+          startExecution(sourceCode, selectedLanguage, stdinVal);
+        }
+      });
+
       setLoadingState(false);
       clearTimeoutBar();
       return;
     }
 
-    // Direct execution if no input needed
-    executeWithStdin(sourceCode, lastLanguageId, '');
+    // Direct run if no input statements exist
+    startExecution(sourceCode, selectedLanguage, '');
   }
 
-  function promptNextInputLine(promptText = '') {
-    const inputLine = document.createElement('div');
-    inputLine.className = 'terminal-input-row';
-    inputLine.style.cssText = 'display:flex; align-items:center; flex-wrap:wrap; margin-bottom:2px;';
+  async function startExecution(sourceCode, languageId, stdinData) {
+    consoleOutput.innerHTML = `
+      <div style="font-family: Consolas, 'Courier New', monospace; font-size: 14px; color: #58a6ff; line-height: 1.6;">
+        <i class="fa-solid fa-spinner fa-spin" style="margin-right: 6px;"></i> Compiling & executing...
+      </div>
+    `;
 
-    if (promptText) {
-      const pSpan = document.createElement('span');
-      pSpan.style.cssText = 'color:#3fb950; font-weight:500; margin-right:6px;';
-      pSpan.textContent = promptText;
-      inputLine.appendChild(pSpan);
-    } else {
-      const promptSymbol = document.createElement('span');
-      promptSymbol.style.cssText = 'color:#58a6ff; margin-right:6px; font-weight:bold;';
-      promptSymbol.textContent = '>';
-      inputLine.appendChild(promptSymbol);
-    }
-
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.autocomplete = 'off';
-    input.spellcheck = false;
-    // Notice: border is completely NONE, no underline line whatsoever
-    input.style.cssText = 'background:transparent; border:none; outline:none; color:#c9d1d9; font-family:inherit; font-size:inherit; flex:1; min-width:60px; caret-color:#58a6ff; padding:0; margin:0;';
-
-    inputLine.appendChild(input);
-    terminalScreen.appendChild(inputLine);
-
-    input.focus();
-    setTimeout(() => input.focus(), 30);
-    consoleOutput.scrollTop = consoleOutput.scrollHeight;
-
-    // Support pasting multi-line input (10 to 100+ lines at once)
-    input.addEventListener('paste', (e) => {
-      const pasteData = (e.clipboardData || window.clipboardData).getData('text');
-      if (pasteData.includes('\n')) {
-        e.preventDefault();
-        const lines = pasteData.split(/\r?\n/).filter(l => l.length > 0);
-        for (const line of lines) {
-          collectedInputs.push(line);
-          const echoLine = document.createElement('div');
-          echoLine.style.color = '#c9d1d9';
-          echoLine.textContent = line;
-          terminalScreen.insertBefore(echoLine, inputLine);
-        }
-        input.value = '';
-        executeWithAllInputs();
-      }
-    });
-
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const val = input.value;
-
-        // If Ctrl+Enter is pressed, immediately submit all entered inputs
-        if (e.ctrlKey) {
-          if (val) collectedInputs.push(val);
-          input.disabled = true;
-          executeWithAllInputs();
-          return;
-        }
-
-        // If user presses Enter on empty line, user is done inputting -> execute
-        if (val === '') {
-          input.disabled = true;
-          inputLine.remove();
-          executeWithAllInputs();
-          return;
-        }
-
-        // Record this input line
-        collectedInputs.push(val);
-        input.disabled = true;
-
-        // Move to the next input line seamlessly
-        promptNextInputLine('');
-      }
-    });
-  }
-
-  function executeWithAllInputs() {
-    const allStdinString = collectedInputs.join('\n') + '\n';
-    
-    // Disable any active input boxes
-    terminalScreen.querySelectorAll('input').forEach(inp => inp.disabled = true);
-
-    const execIndicator = document.createElement('div');
-    execIndicator.style.cssText = 'color:#58a6ff; margin-top:8px; margin-bottom:8px; font-weight:bold;';
-    execIndicator.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Executing program with inputs…';
-    terminalScreen.appendChild(execIndicator);
-    consoleOutput.scrollTop = consoleOutput.scrollHeight;
-
-    executeWithStdin(lastSourceCode, lastLanguageId, allStdinString, execIndicator);
-  }
-
-  async function executeWithStdin(sourceCode, languageId, stdinData, execIndicator = null) {
     setLoadingState(true, 'Running…');
     startTimeoutBar(MAX_RUN_TIMEOUT_MS);
     currentAbortCtrl = new AbortController();
@@ -544,13 +450,13 @@ document.addEventListener('DOMContentLoaded', () => {
         body: JSON.stringify({
           sourceCode,
           languageId,
-          stdin: stdinData,
+          stdin: stdinData ? (stdinData.endsWith('\n') ? stdinData : stdinData + '\n') : '',
           preferLocal: Boolean(preferLocalCheck && preferLocalCheck.checked)
         }),
         signal: currentAbortCtrl.signal
       });
+
       const data = await response.json();
-      if (execIndicator) execIndicator.remove();
 
       if (!response.ok || !data.success) {
         handleExecutionError(data);
@@ -558,7 +464,6 @@ document.addEventListener('DOMContentLoaded', () => {
         displayExecutionResults(data);
       }
     } catch (err) {
-      if (execIndicator) execIndicator.remove();
       handleExecutionError({
         success: false,
         error: err.message || 'Execution failed',
@@ -571,11 +476,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function handleExecutionError(data) {
-    const errSpan = document.createElement('div');
-    errSpan.style.color = '#f85149';
-    errSpan.style.marginTop = '8px';
-    errSpan.textContent = data.userMessage || data.error || 'Execution failed';
-    terminalScreen.appendChild(errSpan);
+    consoleOutput.innerHTML = `
+      <div style="font-family: Consolas, 'Courier New', monospace; font-size: 14px; color: #f85149; line-height: 1.6; white-space: pre-wrap;">
+        <strong>Execution Failed:</strong>
+        <div>${UI.escapeHtml(data.userMessage || data.error || 'Unknown error')}</div>
+      </div>
+    `;
   }
 
   function displayExecutionResults(data) {
@@ -600,31 +506,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const stdout = exec.stdout || data.output || '';
     const stderr = exec.stderr || data.errorOutput || '';
 
-    const divider = document.createElement('div');
-    divider.style.cssText = 'border-top: 1px dashed #30363d; margin: 10px 0;';
-    terminalScreen.appendChild(divider);
+    let outHtml = `<div style="font-family: Consolas, 'Courier New', monospace; font-size: 14px; line-height: 1.6; color: #c9d1d9; white-space: pre-wrap;">`;
 
     if (stdout) {
-      const outBlock = document.createElement('div');
-      outBlock.style.cssText = 'color:#c9d1d9; font-weight:normal; line-height:1.6;';
-      outBlock.textContent = stdout;
-      terminalScreen.appendChild(outBlock);
+      outHtml += `<div>${UI.escapeHtml(stdout)}</div>`;
     }
 
     if (stderr) {
-      const errBlock = document.createElement('div');
-      errBlock.style.cssText = 'color:#f85149; margin-top:4px;';
-      errBlock.textContent = stderr;
-      terminalScreen.appendChild(errBlock);
+      outHtml += `<div style="color: #f85149; margin-top: 6px;">${UI.escapeHtml(stderr)}</div>`;
     }
 
-    const exitDiv = document.createElement('div');
-    exitDiv.style.cssText = `margin-top:12px; font-weight:bold; color:${exitCode === 0 ? '#3fb950' : '#f85149'};`;
-    exitDiv.textContent = exitCode === 0 
-      ? '=== Code Execution Successful ===' 
-      : `=== Process exited with code ${exitCode} ===`;
-    terminalScreen.appendChild(exitDiv);
+    if (!stdout && !stderr) {
+      outHtml += `<div style="color: #8b949e;">(Program finished with no output)</div>`;
+    }
 
+    outHtml += `
+      <div style="margin-top: 14px; font-weight: bold; color: ${exitCode === 0 ? '#3fb950' : '#f85149'};">
+        ${exitCode === 0 ? '=== Code Execution Successful ===' : `=== Process exited with code ${exitCode} ===`}
+      </div>
+    </div>`;
+
+    consoleOutput.innerHTML = outHtml;
     consoleOutput.scrollTop = consoleOutput.scrollHeight;
   }
 
@@ -911,8 +813,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function clearConsole() {
-    if (terminalScreen) terminalScreen.remove();
-    terminalScreen = null;
     consoleOutput.innerHTML = `<div class="console-placeholder">
       <div class="placeholder-icon"><i class="fa-solid fa-terminal"></i></div>
       <h3>Console Cleared</h3>
