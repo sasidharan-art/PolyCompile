@@ -1,330 +1,127 @@
-/**
- * PolyCompile - Interactive Terminal Session Manager
- * 
- * Provides real-time bidirectional streaming of stdin, stdout, and stderr
- * over WebSockets for interactive programs (Python input(), C scanf(), C++ cin, Java Scanner, etc.).
- */
+const { spawn } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 
-'use strict';
+class InteractiveSession {
+  constructor(ws) {
+    this.ws = ws;
+    this.process = null;
+    this.tempDir = null;
+    this.isAlive = true;
 
-const { spawn } = require('node:child_process');
-const fs = require('node:fs');
-const path = require('node:path');
-const os = require('node:os');
-const crypto = require('node:crypto');
-const { getLanguageById } = require('../compiler/LanguageRegistry');
-const LanguageDetector = require('../compiler/LanguageDetector');
+    this.ws.on('message', (msg) => this.handleMessage(msg));
+    this.ws.on('close', () => this.cleanup());
+  }
 
-let runnerLanguages = null;
-try {
-  runnerLanguages = JSON.parse(
-    fs.readFileSync(path.join(__dirname, '../../runner/languages.json'), 'utf8')
-  );
-} catch (e) {
-  runnerLanguages = [];
-}
-
-/**
- * Checks whether Docker is available on the host.
- */
-let dockerAvailable = null;
-function checkDocker() {
-  if (dockerAvailable !== null) return Promise.resolve(dockerAvailable);
-  return new Promise((resolve) => {
+  async handleMessage(rawMessage) {
     try {
-      const p = spawn('docker', ['--version'], { windowsHide: true });
-      p.on('error', () => {
-        dockerAvailable = false;
-        resolve(false);
-      });
-      p.on('close', (code) => {
-        dockerAvailable = code === 0;
-        resolve(dockerAvailable);
-      });
-    } catch {
-      dockerAvailable = false;
-      resolve(false);
-    }
-  });
-}
-
-/**
- * Handles an incoming WebSocket connection for an interactive code execution session.
- * @param {import('ws').WebSocket} ws
- */
-function handleInteractiveSession(ws) {
-  let child = null;
-  let dockerContainer = null;
-  let isDone = false;
-  let startTime = null;
-  let timeoutTimer = null;
-  let tmpFilePath = null;
-
-  const cleanup = () => {
-    if (isDone) return;
-    isDone = true;
-
-    if (timeoutTimer) {
-      clearTimeout(timeoutTimer);
-      timeoutTimer = null;
-    }
-
-    if (tmpFilePath) {
-      try { fs.unlinkSync(tmpFilePath); } catch {}
-      tmpFilePath = null;
-    }
-
-    if (child && !child.killed) {
-      try { child.kill('SIGKILL'); } catch {}
-      child = null;
-    }
-
-    if (dockerContainer) {
-      const name = dockerContainer;
-      dockerContainer = null;
-      try {
-        spawn('docker', ['rm', '-f', name], { windowsHide: true });
-      } catch {}
-    }
-  };
-
-  ws.on('message', async (raw) => {
-    let msg;
-    try {
-      msg = JSON.parse(raw.toString());
-    } catch {
-      return;
-    }
-
-    if (msg.type === 'start') {
-      const sourceCode = typeof msg.sourceCode === 'string' ? msg.sourceCode : '';
-      let languageId = (msg.languageId || '').toLowerCase();
-      const timeoutMs = Math.min(Math.max(Number(msg.timeoutMs) || 30000, 2000), 60000);
-
-      if (!sourceCode.trim()) {
-        ws.send(JSON.stringify({ type: 'error', message: 'No source code provided.' }));
-        return ws.close(1008);
-      }
-
-      startTime = Date.now();
-
-      // Resolve language
-      let lang = languageId ? getLanguageById(languageId) : null;
-      if (!lang) {
-        const det = LanguageDetector.detect(sourceCode);
-        lang = det.detected;
-        languageId = (lang?.id || '').toLowerCase();
-      }
-
-      ws.send(JSON.stringify({
-        type: 'ready',
-        language: lang?.name || languageId || 'Universal'
-      }));
-
-      // Setup session timeout
-      timeoutTimer = setTimeout(() => {
-        if (!isDone) {
-          if (ws.readyState === ws.OPEN) {
-            ws.send(JSON.stringify({ type: 'stderr', data: '\n[Execution timed out]' }));
-            ws.send(JSON.stringify({
-              type: 'exit',
-              code: 124,
-              durationMs: Date.now() - startTime
-            }));
-          }
-          cleanup();
+      const msg = JSON.parse(rawMessage);
+      if (msg.type === 'start') {
+        await this.startExecution(msg.sourceCode, msg.languageId, msg.timeoutMs || 60000);
+      } else if (msg.type === 'input') {
+        if (this.process && this.process.stdin && !this.process.stdin.destroyed) {
+          this.process.stdin.write(msg.data + '\n');
         }
-      }, timeoutMs);
-
-      try {
-        await startProcess(languageId, sourceCode, lang, ws, {
-          onSpawn: (proc, containerName, tempFile) => {
-            child = proc;
-            dockerContainer = containerName;
-            tmpFilePath = tempFile;
-          },
-          onExit: (code) => {
-            if (!isDone) {
-              isDone = true;
-              if (timeoutTimer) clearTimeout(timeoutTimer);
-              const durationMs = Date.now() - startTime;
-              if (ws.readyState === ws.OPEN) {
-                ws.send(JSON.stringify({ type: 'exit', code: code ?? 0, durationMs }));
-              }
-              cleanup();
-            }
-          }
-        });
-      } catch (err) {
-        if (ws.readyState === ws.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'error',
-            message: `Execution failed to start: ${err.message}`
-          }));
-        }
-        cleanup();
+      } else if (msg.type === 'stop') {
+        this.cleanup();
       }
-    } else if (msg.type === 'input') {
-      if (child && child.stdin && child.stdin.writable) {
-        const text = typeof msg.data === 'string' ? msg.data : '';
-        const withNewline = msg.newline === false ? text : text + '\n';
-        child.stdin.write(withNewline);
-      }
-    } else if (msg.type === 'eof') {
-      if (child && child.stdin && child.stdin.writable) {
-        child.stdin.end();
-      }
-    } else if (msg.type === 'stop') {
-      cleanup();
-      if (ws.readyState === ws.OPEN) {
-        ws.send(JSON.stringify({
-          type: 'exit',
-          code: 130,
-          durationMs: startTime ? Date.now() - startTime : 0
-        }));
-      }
-    }
-  });
-
-  ws.on('close', cleanup);
-  ws.on('error', cleanup);
-}
-
-/**
- * Spawns the execution process for the requested language.
- */
-async function startProcess(langId, sourceCode, langMeta, ws, callbacks) {
-  const isDocker = await checkDocker();
-
-  // 1. Python: Fast-path local execution on host (if available)
-  if (langId === 'python' || langId === 'py') {
-    try {
-      const tmpFile = path.join(os.tmpdir(), `poly_${crypto.randomBytes(6).toString('hex')}.py`);
-      fs.writeFileSync(tmpFile, sourceCode, 'utf8');
-
-      const proc = spawn('python', ['-u', tmpFile], {
-        windowsHide: true,
-        stdio: ['pipe', 'pipe', 'pipe']
-      });
-
-      let spawned = false;
-      proc.on('spawn', () => { spawned = true; });
-
-      attachStreams(proc, ws, callbacks.onExit);
-      callbacks.onSpawn(proc, null, tmpFile);
-      return;
-    } catch {
-      // Fall through to Docker or container if host python failed
+    } catch (err) {
+      this.send({ type: 'error', message: err.message });
     }
   }
 
-  // 2. JavaScript: Fast-path local execution on host via node
-  if (langId === 'javascript' || langId === 'js') {
-    try {
-      const tmpFile = path.join(os.tmpdir(), `poly_${crypto.randomBytes(6).toString('hex')}.js`);
-      fs.writeFileSync(tmpFile, sourceCode, 'utf8');
-
-      const proc = spawn('node', [tmpFile], {
-        windowsHide: true,
-        stdio: ['pipe', 'pipe', 'pipe']
-      });
-
-      attachStreams(proc, ws, callbacks.onExit);
-      callbacks.onSpawn(proc, null, tmpFile);
-      return;
-    } catch {
-      // Fall through
+  send(data) {
+    if (this.ws.readyState === 1) {
+      this.ws.send(JSON.stringify(data));
     }
   }
 
-  // 3. Docker-based execution using polycompile-runner:latest
-  if (isDocker) {
-    const langDef = runnerLanguages.find(x => x.id === langId) || {
-      sourceFile: langMeta?.extension ? `main${langMeta.extension}` : 'main.txt'
-    };
+  async startExecution(sourceCode, languageId, timeoutMs) {
+    this.tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'polycompile-'));
+    const lang = (languageId || 'python').toLowerCase();
 
-    const containerName = `pc-${crypto.randomBytes(6).toString('hex')}`;
-    const b64 = Buffer.from(sourceCode, 'utf8').toString('base64');
-    const fileName = langDef.sourceFile || 'main.txt';
+    let cmd = '';
+    let args = [];
 
-    let script = `mkdir -p /work /exec && echo "${b64}" | base64 -d > /work/${fileName}`;
-
-    if (langDef.compile && Array.isArray(langDef.compile) && langDef.compile.length > 0) {
-      script += ` && ${langDef.compile.join(' ')}`;
-    }
-
-    if (langDef.run && Array.isArray(langDef.run) && langDef.run.length > 0) {
-      script += ` && ${langDef.run.join(' ')}`;
+    if (lang.includes('python')) {
+      const file = path.join(this.tempDir, 'main.py');
+      fs.writeFileSync(file, sourceCode);
+      cmd = 'python3';
+      args = ['-u', file];
+    } else if (lang === 'c') {
+      const src = path.join(this.tempDir, 'main.c');
+      const bin = path.join(this.tempDir, 'main');
+      fs.writeFileSync(src, sourceCode);
+      const compile = spawn('gcc', [src, '-o', bin]);
+      await new Promise((res, rej) => {
+        let errBuf = '';
+        compile.stderr.on('data', d => errBuf += d.toString());
+        compile.on('close', code => code === 0 ? res() : rej(new Error(errBuf || 'Compilation error')));
+      });
+      cmd = bin;
+      args = [];
+    } else if (lang === 'cpp') {
+      const src = path.join(this.tempDir, 'main.cpp');
+      const bin = path.join(this.tempDir, 'main');
+      fs.writeFileSync(src, sourceCode);
+      const compile = spawn('g++', [src, '-o', bin]);
+      await new Promise((res, rej) => {
+        let errBuf = '';
+        compile.stderr.on('data', d => errBuf += d.toString());
+        compile.on('close', code => code === 0 ? res() : rej(new Error(errBuf || 'Compilation error')));
+      });
+      cmd = bin;
+      args = [];
     } else {
-      script += ` && cat /work/${fileName}`;
+      // Fallback command
+      const file = path.join(this.tempDir, 'script.py');
+      fs.writeFileSync(file, sourceCode);
+      cmd = 'python3';
+      args = ['-u', file];
     }
 
-    const args = [
-      'run', '-i', '--rm',
-      '--name', containerName,
-      '--network', 'none',
-      '--memory', '256m',
-      '--cpus', '1.0',
-      '--entrypoint', 'sh',
-      'polycompile-runner:latest',
-      '-c', script
-    ];
+    const startTime = Date.now();
+    this.process = spawn(cmd, args, { cwd: this.tempDir });
 
-    const proc = spawn('docker', args, {
-      windowsHide: true,
-      stdio: ['pipe', 'pipe', 'pipe']
+    this.send({ type: 'ready' });
+
+    this.process.stdout.on('data', (data) => {
+      this.send({ type: 'stdout', data: data.toString() });
     });
 
-    attachStreams(proc, ws, callbacks.onExit);
-    callbacks.onSpawn(proc, containerName, null);
-    return;
+    this.process.stderr.on('data', (data) => {
+      this.send({ type: 'stderr', data: data.toString() });
+    });
+
+    this.process.on('close', (code) => {
+      this.send({ type: 'exit', code: code || 0, durationMs: Date.now() - startTime });
+      this.cleanup();
+    });
+
+    this.process.on('error', (err) => {
+      this.send({ type: 'error', message: err.message });
+      this.cleanup();
+    });
+
+    setTimeout(() => {
+      if (this.process) {
+        this.send({ type: 'error', message: 'Execution timed out.' });
+        this.cleanup();
+      }
+    }, timeoutMs);
   }
 
-  // 4. Fallback if Docker is not available and no host runner exists
-  throw new Error(
-    `No interactive execution runner available for ${langMeta?.name || langId}. ` +
-    `Ensure Docker is running or use the batch compiler.`
-  );
+  cleanup() {
+    if (this.process) {
+      try { this.process.kill(); } catch {}
+      this.process = null;
+    }
+    if (this.tempDir) {
+      try { fs.rmSync(this.tempDir, { recursive: true, force: true }); } catch {}
+      this.tempDir = null;
+    }
+  }
 }
 
-/**
- * Attaches stdout and stderr data handlers to stream to WebSocket.
- */
-function attachStreams(proc, ws, onExit) {
-  proc.stdout.on('data', (chunk) => {
-    if (ws.readyState === ws.OPEN) {
-      ws.send(JSON.stringify({
-        type: 'stdout',
-        data: chunk.toString('utf8')
-      }));
-    }
-  });
-
-  proc.stderr.on('data', (chunk) => {
-    if (ws.readyState === ws.OPEN) {
-      ws.send(JSON.stringify({
-        type: 'stderr',
-        data: chunk.toString('utf8')
-      }));
-    }
-  });
-
-  proc.on('error', (err) => {
-    if (ws.readyState === ws.OPEN) {
-      ws.send(JSON.stringify({
-        type: 'stderr',
-        data: `Process error: ${err.message}\n`
-      }));
-    }
-    onExit(1);
-  });
-
-  proc.on('close', (code) => {
-    onExit(code ?? 0);
-  });
-}
-
-module.exports = {
-  handleInteractiveSession,
-  checkDocker
-};
+module.exports = InteractiveSession;
