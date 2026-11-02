@@ -1,5 +1,5 @@
 /**
- * PolyCompile — Main Application Controller v2 (True Inline Interactive Terminal)
+ * PolyCompile — Main Application Controller v2 (Multi-Line Interactive Terminal)
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -352,9 +352,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* =========================================================
-     TRUE INLINE TERMINAL IMPLEMENTATION
+     MULTI-LINE INTERACTIVE TERMINAL
   ========================================================= */
   let terminalScreen = null;
+  let collectedInputs = [];
   let lastSourceCode = '';
   let lastLanguageId = '';
 
@@ -397,67 +398,141 @@ document.addEventListener('DOMContentLoaded', () => {
 
     lastSourceCode = sourceCode;
     lastLanguageId = resolveLanguage(sourceCode, languageSelect.value);
+    collectedInputs = [];
 
-    // Detect if code requests input
+    // Check if code requires inputs
     const requiresInput = /(?:input\s*\(|scanf\s*\(|cin\s*>>|readLine|Scanner|gets\s*\(|fgets\s*\()/i.test(sourceCode);
 
     if (requiresInput) {
-      // Find prompt string
-      let promptText = '';
+      // Find initial prompt text if present
+      let firstPrompt = '';
       const pyMatch = sourceCode.match(/input\s*\(\s*["']([^"']*)["']\s*\)/);
       const cMatch  = sourceCode.match(/printf\s*\(\s*["']([^"']+)["']\s*\)/);
 
-      if (pyMatch && pyMatch[1]) promptText = pyMatch[1];
-      else if (cMatch && cMatch[1]) promptText = cMatch[1];
-      else promptText = 'Input: ';
+      if (pyMatch && pyMatch[1]) firstPrompt = pyMatch[1];
+      else if (cMatch && cMatch[1]) firstPrompt = cMatch[1];
 
-      // Render the prompt and input box ON THE SAME LINE
-      const promptLine = document.createElement('div');
-      promptLine.className = 'terminal-prompt-line';
-      promptLine.style.cssText = 'display: flex; align-items: center; flex-wrap: wrap; margin-bottom: 4px;';
+      // Add a helpful top toolbar inside the console
+      const hintBar = document.createElement('div');
+      hintBar.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:#161b22; padding:4px 8px; border-radius:4px; margin-bottom:8px; font-size:12px; color:#8b949e; border:1px solid #30363d;';
+      hintBar.innerHTML = `<span><i class="fa-solid fa-terminal" style="color:#58a6ff; margin-right:5px;"></i>Type inputs line by line (or paste multiple). Press <b>Enter on empty line</b> or click Run:</span>`;
 
-      const promptSpan = document.createElement('span');
-      promptSpan.style.color = '#3fb950';
-      promptSpan.style.fontWeight = '500';
-      promptSpan.textContent = promptText;
-
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.autocomplete = 'off';
-      input.spellcheck = false;
-      input.style.cssText = 'background: transparent; border: none; outline: none; color: #58a6ff; font-family: inherit; font-size: inherit; margin-left: 6px; flex: 1; min-width: 50px; caret-color: #58a6ff; border-bottom: 1.5px solid #58a6ff;';
-
-      promptLine.appendChild(promptSpan);
-      promptLine.appendChild(input);
-      terminalScreen.appendChild(promptLine);
-
-      // Auto-focus input
-      input.focus();
-      setTimeout(() => input.focus(), 50);
-
-      // Listen for Enter key
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          const val = input.value;
-          input.disabled = true;
-          input.style.borderBottom = 'none';
-
-          // Immediately send value to sandbox
-          executeWithStdin(lastSourceCode, lastLanguageId, val + '\n', promptText);
-        }
+      const submitBtn = document.createElement('button');
+      submitBtn.innerHTML = '<i class="fa-solid fa-play"></i> Run Code';
+      submitBtn.style.cssText = 'background:#238636; color:#fff; border:none; padding:2px 10px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;';
+      submitBtn.addEventListener('click', () => {
+        executeWithAllInputs();
       });
+      hintBar.appendChild(submitBtn);
+      terminalScreen.appendChild(hintBar);
 
+      // Start the interactive input loop
+      promptNextInputLine(firstPrompt);
       setLoadingState(false);
       clearTimeoutBar();
       return;
     }
 
     // Direct execution if no input needed
-    executeWithStdin(sourceCode, lastLanguageId, '', '');
+    executeWithStdin(sourceCode, lastLanguageId, '');
   }
 
-  async function executeWithStdin(sourceCode, languageId, stdinData, promptText) {
+  function promptNextInputLine(promptText = '') {
+    const inputLine = document.createElement('div');
+    inputLine.className = 'terminal-input-row';
+    inputLine.style.cssText = 'display:flex; align-items:center; flex-wrap:wrap; margin-bottom:2px;';
+
+    if (promptText) {
+      const pSpan = document.createElement('span');
+      pSpan.style.cssText = 'color:#3fb950; font-weight:500; margin-right:6px;';
+      pSpan.textContent = promptText;
+      inputLine.appendChild(pSpan);
+    } else {
+      const promptSymbol = document.createElement('span');
+      promptSymbol.style.cssText = 'color:#58a6ff; margin-right:6px; font-weight:bold;';
+      promptSymbol.textContent = '>';
+      inputLine.appendChild(promptSymbol);
+    }
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    // Notice: border is completely NONE, no underline line whatsoever
+    input.style.cssText = 'background:transparent; border:none; outline:none; color:#c9d1d9; font-family:inherit; font-size:inherit; flex:1; min-width:60px; caret-color:#58a6ff; padding:0; margin:0;';
+
+    inputLine.appendChild(input);
+    terminalScreen.appendChild(inputLine);
+
+    input.focus();
+    setTimeout(() => input.focus(), 30);
+    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+
+    // Support pasting multi-line input (10 to 100+ lines at once)
+    input.addEventListener('paste', (e) => {
+      const pasteData = (e.clipboardData || window.clipboardData).getData('text');
+      if (pasteData.includes('\n')) {
+        e.preventDefault();
+        const lines = pasteData.split(/\r?\n/).filter(l => l.length > 0);
+        for (const line of lines) {
+          collectedInputs.push(line);
+          const echoLine = document.createElement('div');
+          echoLine.style.color = '#c9d1d9';
+          echoLine.textContent = line;
+          terminalScreen.insertBefore(echoLine, inputLine);
+        }
+        input.value = '';
+        executeWithAllInputs();
+      }
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const val = input.value;
+
+        // If Ctrl+Enter is pressed, immediately submit all entered inputs
+        if (e.ctrlKey) {
+          if (val) collectedInputs.push(val);
+          input.disabled = true;
+          executeWithAllInputs();
+          return;
+        }
+
+        // If user presses Enter on empty line, user is done inputting -> execute
+        if (val === '') {
+          input.disabled = true;
+          inputLine.remove();
+          executeWithAllInputs();
+          return;
+        }
+
+        // Record this input line
+        collectedInputs.push(val);
+        input.disabled = true;
+
+        // Move to the next input line seamlessly
+        promptNextInputLine('');
+      }
+    });
+  }
+
+  function executeWithAllInputs() {
+    const allStdinString = collectedInputs.join('\n') + '\n';
+    
+    // Disable any active input boxes
+    terminalScreen.querySelectorAll('input').forEach(inp => inp.disabled = true);
+
+    const execIndicator = document.createElement('div');
+    execIndicator.style.cssText = 'color:#58a6ff; margin-top:8px; margin-bottom:8px; font-weight:bold;';
+    execIndicator.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Executing program with inputs…';
+    terminalScreen.appendChild(execIndicator);
+    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+
+    executeWithStdin(lastSourceCode, lastLanguageId, allStdinString, execIndicator);
+  }
+
+  async function executeWithStdin(sourceCode, languageId, stdinData, execIndicator = null) {
     setLoadingState(true, 'Running…');
     startTimeoutBar(MAX_RUN_TIMEOUT_MS);
     currentAbortCtrl = new AbortController();
@@ -475,12 +550,15 @@ document.addEventListener('DOMContentLoaded', () => {
         signal: currentAbortCtrl.signal
       });
       const data = await response.json();
+      if (execIndicator) execIndicator.remove();
+
       if (!response.ok || !data.success) {
         handleExecutionError(data);
       } else {
-        displayExecutionResults(data, promptText);
+        displayExecutionResults(data);
       }
     } catch (err) {
+      if (execIndicator) execIndicator.remove();
       handleExecutionError({
         success: false,
         error: err.message || 'Execution failed',
@@ -500,7 +578,7 @@ document.addEventListener('DOMContentLoaded', () => {
     terminalScreen.appendChild(errSpan);
   }
 
-  function displayExecutionResults(data, promptText) {
+  function displayExecutionResults(data) {
     const exec = data.execution || {};
 
     const ms = exec.executionTimeMs != null ? exec.executionTimeMs : (data.durationMs != null ? data.durationMs : null);
@@ -519,37 +597,29 @@ document.addEventListener('DOMContentLoaded', () => {
       statExitCode.style.color = exitCode === 0 ? 'var(--color-success)' : 'var(--color-error)';
     }
 
-    let stdout = exec.stdout || data.output || '';
+    const stdout = exec.stdout || data.output || '';
     const stderr = exec.stderr || data.errorOutput || '';
 
-    // Strip duplicate prompt text from output if already displayed
-    if (promptText && stdout) {
-      const cleanPrompt = promptText.trim();
-      if (stdout.startsWith(cleanPrompt)) {
-        stdout = stdout.slice(cleanPrompt.length).replace(/^[\r\n]+/, '');
-      }
-    }
+    const divider = document.createElement('div');
+    divider.style.cssText = 'border-top: 1px dashed #30363d; margin: 10px 0;';
+    terminalScreen.appendChild(divider);
 
     if (stdout) {
       const outBlock = document.createElement('div');
-      outBlock.style.color = '#c9d1d9';
-      outBlock.style.marginTop = '4px';
+      outBlock.style.cssText = 'color:#c9d1d9; font-weight:normal; line-height:1.6;';
       outBlock.textContent = stdout;
       terminalScreen.appendChild(outBlock);
     }
 
     if (stderr) {
       const errBlock = document.createElement('div');
-      errBlock.style.color = '#f85149';
-      errBlock.style.marginTop = '4px';
+      errBlock.style.cssText = 'color:#f85149; margin-top:4px;';
       errBlock.textContent = stderr;
       terminalScreen.appendChild(errBlock);
     }
 
     const exitDiv = document.createElement('div');
-    exitDiv.style.marginTop = '12px';
-    exitDiv.style.fontWeight = 'bold';
-    exitDiv.style.color = exitCode === 0 ? '#3fb950' : '#f85149';
+    exitDiv.style.cssText = `margin-top:12px; font-weight:bold; color:${exitCode === 0 ? '#3fb950' : '#f85149'};`;
     exitDiv.textContent = exitCode === 0 
       ? '=== Code Execution Successful ===' 
       : `=== Process exited with code ${exitCode} ===`;
