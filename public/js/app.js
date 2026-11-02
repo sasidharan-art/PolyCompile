@@ -13,6 +13,7 @@
  *  - Language file extensions shown in dropdown
  *  - Font-size controls
  *  - Request AbortController for cancellation
+ *  - STDIN interactive capture for batch cloud execution
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -391,7 +392,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* =========================================================
-     RUN & COMPILE (DIRECT BATCH COMPILATION)
+     RUN & COMPILE (DIRECT BATCH COMPILATION WITH STDIN PROMPT)
   ========================================================= */
   async function runCode() {
     if (isRunning) {
@@ -433,7 +434,6 @@ document.addEventListener('DOMContentLoaded', () => {
         languageId = detected.detected?.id || detected.language?.id || '';
       }
 
-      // Execute directly via the batch compiler engine
       await fallbackBatchRun(sourceCode, languageId);
 
     } catch (err) {
@@ -454,12 +454,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function fallbackBatchRun(sourceCode, languageId) {
     try {
+      // Check if the code requests keyboard input and prompt for it
+      let stdinData = "";
+      const needsInput = /input\(|scanf\(|cin\s*>>|readLine\(|Scanner/i.test(sourceCode);
+      if (needsInput) {
+        stdinData = prompt("Enter input value(s) for your program (if multiple, separate with newlines):") || "";
+      }
+
       const response = await fetch('/api/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sourceCode,
           languageId: languageId === 'auto' ? '' : languageId,
+          stdin: stdinData,
           preferLocal: Boolean(preferLocalCheck && preferLocalCheck.checked)
         }),
         signal: currentAbortCtrl ? currentAbortCtrl.signal : undefined
