@@ -1,19 +1,5 @@
 /**
- * PolyCompile — Main Application Controller v2
- *
- * Improvements over v1:
- *  - Proper side-by-side layout with resizable panels
- *  - Timeout progress bar with countdown
- *  - Error / success / docker-unavailable banners
- *  - All error types handled gracefully
- *  - Toast notification system
- *  - Cursor position tracker
- *  - Keyboard shortcuts (Ctrl+Enter, Ctrl+L, Ctrl+/, Ctrl+S)
- *  - Copy code & copy output buttons
- *  - Language file extensions shown in dropdown
- *  - Font-size controls
- *  - Request AbortController for cancellation
- *  - STDIN interactive capture for batch cloud execution
+ * PolyCompile — Main Application Controller v2 (Programiz Interactive Terminal)
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -107,9 +93,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let detectionRequestId = 0;
   let isRunning          = false;
   let currentAbortCtrl   = null;
-  let editorFontSize     = 14;
-  let timeoutTimer       = null;
-  let timeoutProgress    = 0;
   let timeoutProgressInterval = null;
   const MAX_RUN_TIMEOUT_MS = 60000;
 
@@ -254,10 +237,6 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       clearConsole();
     }
-    else if (e.key === 'd' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      duplicateLine();
-    }
   });
 
   codeEditor.addEventListener('click', updateCursorPos);
@@ -285,18 +264,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       fileExtDisplay.style.display = 'none';
     }
-  }
-
-  function duplicateLine() {
-    const pos   = codeEditor.selectionStart;
-    const linesBefore = codeEditor.value.substring(0, pos).split('\n');
-    const lineIndex   = linesBefore.length - 1;
-    const lines = codeEditor.value.split('\n');
-    const currentLine = lines[lineIndex] || '';
-    lines.splice(lineIndex + 1, 0, currentLine);
-    codeEditor.value = lines.join('\n');
-    UI.syncLineNumbers(codeEditor, lineNumbers);
-    updateFileInfo();
   }
 
   /* =========================================================
@@ -335,9 +302,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (err) {
       if (requestId !== detectionRequestId) return;
-      if (err.name !== 'TimeoutError' && err.name !== 'AbortError') {
-        console.warn('Detection failed:', err.message);
-      }
     }
   }
 
@@ -349,7 +313,6 @@ document.addEventListener('DOMContentLoaded', () => {
     timeoutBar.style.display = 'block';
     timeoutFill.style.width = '0%';
     timeoutFill.classList.remove('warning');
-    timeoutProgress = 0;
     const startTime = Date.now();
 
     timeoutProgressInterval = setInterval(() => {
@@ -358,7 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
       timeoutFill.style.width = pct + '%';
       const sec = (elapsed / 1000).toFixed(1);
       if (timeoutLabel) {
-        timeoutLabel.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${elapsed > 10000 ? 'Processing complex code…' : 'Running…'} ${sec}s`;
+        timeoutLabel.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Running… ${sec}s`;
       }
       if (pct >= 50) timeoutFill.classList.add('warning');
     }, 250);
@@ -392,8 +355,75 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* =========================================================
-     RUN & COMPILE (DIRECT BATCH COMPILATION WITH STDIN PROMPT)
+     PROGRAMIZ DIRECT INTERACTIVE TERMINAL
   ========================================================= */
+  let terminalScreen = null;
+  let terminalText = null;
+  let inlineInputWrapper = null;
+  let inlineInput = null;
+
+  function ensureProgramizTerminal() {
+    if (terminalScreen && terminalScreen.isConnected) return;
+    consoleOutput.innerHTML = '';
+
+    terminalScreen = document.createElement('div');
+    terminalScreen.className = 'programiz-terminal';
+    terminalScreen.style.fontFamily = 'monospace';
+    terminalScreen.style.whiteSpace = 'pre-wrap';
+    terminalScreen.style.lineHeight = '1.5';
+    consoleOutput.appendChild(terminalScreen);
+
+    terminalText = document.createElement('span');
+    terminalText.className = 'terminal-text';
+    terminalScreen.appendChild(terminalText);
+
+    inlineInputWrapper = document.createElement('span');
+    inlineInputWrapper.className = 'terminal-input-wrapper';
+    inlineInputWrapper.style.display = 'none';
+    inlineInputWrapper.innerHTML = `<input type="text" class="terminal-inline-input" autocomplete="off" spellcheck="false" 
+      style="background:transparent; border:none; outline:none; color:#58a6ff; font-family:monospace; font-size:inherit; padding:0; margin:0; width:2ch; caret-color:#58a6ff;" />`;
+    terminalScreen.appendChild(inlineInputWrapper);
+
+    inlineInput = inlineInputWrapper.querySelector('input');
+
+    inlineInput.addEventListener('input', () => {
+      inlineInput.style.width = Math.max(2, inlineInput.value.length + 1) + 'ch';
+      consoleOutput.scrollTop = consoleOutput.scrollHeight;
+    });
+
+    inlineInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const val = inlineInput.value;
+
+        // Echo typed input onto screen in cyan
+        const echo = document.createElement('span');
+        echo.style.color = '#58a6ff';
+        echo.textContent = val + '\n';
+        terminalText.appendChild(echo);
+
+        inlineInput.value = '';
+        inlineInputWrapper.style.display = 'none';
+
+        // Execute code with the user input
+        executeWithStdin(lastSourceCode, lastLanguageId, val + '\n');
+      }
+    });
+  }
+
+  function focusTerminal() {
+    if (inlineInput && inlineInputWrapper && inlineInputWrapper.style.display !== 'none') {
+      inlineInput.focus();
+    }
+  }
+
+  if (consoleOutput) {
+    consoleOutput.addEventListener('click', focusTerminal);
+  }
+
+  let lastSourceCode = '';
+  let lastLanguageId = '';
+
   async function runCode() {
     if (isRunning) {
       if (currentAbortCtrl) currentAbortCtrl.abort();
@@ -414,53 +444,72 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.innerWidth <= 900) setResponsiveView('output');
     switchTab('consoleTab');
     hideAllBanners();
-    setLoadingState(true, 'Compiling & Running…');
+    setLoadingState(true, 'Running…');
     startTimeoutBar(MAX_RUN_TIMEOUT_MS);
 
-    consoleOutput.innerHTML = '<div class="terminal-stream-chunk"><i class="fa-solid fa-spinner fa-spin"></i> Compiling code...</div>';
+    ensureProgramizTerminal();
+    terminalText.innerHTML = '';
+    if (inlineInputWrapper) inlineInputWrapper.style.display = 'none';
 
-    currentAbortCtrl = new AbortController();
+    lastSourceCode = sourceCode;
 
-    try {
-      let languageId = selectedLang;
-      if (!languageId || languageId === 'auto') {
+    let languageId = selectedLang;
+    if (!languageId || languageId === 'auto') {
+      try {
         const detectedRes = await fetch('/api/detect', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sourceCode }),
-          signal: currentAbortCtrl.signal
+          signal: AbortSignal.timeout(6000)
         });
         const detected = await detectedRes.json();
         languageId = detected.detected?.id || detected.language?.id || '';
+      } catch {
+        languageId = '';
+      }
+    }
+    lastLanguageId = languageId;
+
+    // Check if code has input functions (input, scanf, cin, Scanner, etc.)
+    const requiresInput = /input\s*\(|scanf\s*\(|cin\s*>>|readLine|Scanner/i.test(sourceCode);
+
+    if (requiresInput) {
+      // Extract prompt text like "Enter the name: " directly from source code
+      let promptText = '';
+      const pyMatch = sourceCode.match(/input\s*\(\s*["']([^"']+)["']\s*\)/);
+      const cMatch  = sourceCode.match(/printf\s*\(\s*["']([^"']+)["']\s*\)/);
+
+      if (pyMatch && pyMatch[1]) promptText = pyMatch[1];
+      else if (cMatch && cMatch[1]) promptText = cMatch[1];
+
+      // Display prompt directly inside terminal window
+      if (promptText) {
+        const pSpan = document.createElement('span');
+        pSpan.style.color = '#3fb950';
+        pSpan.textContent = promptText;
+        terminalText.appendChild(pSpan);
       }
 
-      await fallbackBatchRun(sourceCode, languageId);
-
-    } catch (err) {
-      if (err.name === 'AbortError') {
-        showToast('Execution stopped.', 'info');
-      } else {
-        handleExecutionError({
-          success: false,
-          error: err.message || 'Execution error',
-          userMessage: 'Compilation request failed.'
-        });
-      }
-    } finally {
+      // Display the input field right on the terminal line
+      inlineInputWrapper.style.display = 'inline';
+      terminalScreen.appendChild(inlineInputWrapper);
       setLoadingState(false);
       clearTimeoutBar();
+      focusTerminal();
+      setTimeout(focusTerminal, 50);
+      return;
     }
+
+    // If no interactive input needed, run immediately
+    executeWithStdin(sourceCode, languageId, '');
   }
 
-  async function fallbackBatchRun(sourceCode, languageId) {
-    try {
-      // Check if the code requests keyboard input and prompt for it
-      let stdinData = "";
-      const needsInput = /input\(|scanf\(|cin\s*>>|readLine\(|Scanner/i.test(sourceCode);
-      if (needsInput) {
-        stdinData = prompt("Enter input value(s) for your program (if multiple, separate with newlines):") || "";
-      }
+  async function executeWithStdin(sourceCode, languageId, stdinData) {
+    setLoadingState(true, 'Running…');
+    startTimeoutBar(MAX_RUN_TIMEOUT_MS);
+    currentAbortCtrl = new AbortController();
 
+    try {
       const response = await fetch('/api/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -470,7 +519,7 @@ document.addEventListener('DOMContentLoaded', () => {
           stdin: stdinData,
           preferLocal: Boolean(preferLocalCheck && preferLocalCheck.checked)
         }),
-        signal: currentAbortCtrl ? currentAbortCtrl.signal : undefined
+        signal: currentAbortCtrl.signal
       });
       const data = await response.json();
       if (!response.ok || !data.success) {
@@ -491,100 +540,62 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function handleExecutionError(data) {
-    const isDockerDown = data.errorType === 'execution_service_unavailable';
-    const isTimeout    = data.status === 'TIMEOUT';
-
-    if (isTimeout) {
-      showBanner(timeoutBanner);
-    } else if (isDockerDown) {
-      showBanner(dockerErrorBanner, dockerErrorMsg,
-        data.userMessage || 'Execution sandbox is busy. Please try again.');
-    } else {
-      showBanner(compilationErrorBanner, errorBannerTitle, 'Execution Error');
-      if (errorBannerMsg) errorBannerMsg.textContent = data.userMessage || data.error || 'The request could not be completed.';
-    }
-
-    consoleOutput.innerHTML = `<div class="service-error-card">
-      <strong>${UI.escapeHtml(data.errorType === 'execution_service_unavailable' ? 'Execution Service Unavailable' : 'Execution Failed')}</strong>
-      <p>${UI.escapeHtml(data.userMessage || data.error || 'Unknown error')}</p>
-      ${data.error ? `<details><summary>Details</summary><pre>${UI.escapeHtml(data.error)}</pre></details>` : ''}
-    </div>`;
-  }
-
-  function showBanner(banner, textEl, message) {
-    if (!banner) return;
-    banner.style.display = 'flex';
-    if (textEl && message !== undefined) textEl.textContent = message;
+    ensureProgramizTerminal();
+    const errSpan = document.createElement('div');
+    errSpan.style.color = '#f85149';
+    errSpan.style.marginTop = '8px';
+    errSpan.textContent = data.userMessage || data.error || 'Execution failed';
+    terminalScreen.appendChild(errSpan);
   }
 
   function displayExecutionResults(data) {
+    ensureProgramizTerminal();
     const exec = data.execution || {};
 
     const ms = exec.executionTimeMs != null ? exec.executionTimeMs : (data.durationMs != null ? data.durationMs : null);
-    const timedOut = exec.timedOut || data.timedOut || false;
-
     if (ms != null) {
-      statExecTime.textContent = ms >= 1000 ? `${(ms / 1000).toFixed(2)}s (${ms} ms)` : `${ms} ms`;
-      if (timedOut) {
-        statExecTime.textContent += ' [TIMEOUT]';
-        statExecTime.style.color = 'var(--color-error)';
-      } else {
-        statExecTime.style.color = 'var(--color-success)';
-      }
-    } else {
-      statExecTime.textContent = '—';
-      statExecTime.style.color = '';
+      statExecTime.textContent = `${ms} ms`;
+      statExecTime.style.color = 'var(--color-success)';
     }
 
     const cMs = data.compileTimeMs;
-    statCompileTime.textContent = cMs != null ? (cMs >= 1000 ? `${(cMs / 1000).toFixed(2)}s (${cMs} ms)` : `${cMs} ms`) : '—';
-    statEngine.textContent      = exec.engine || data.language?.name || '—';
-
-    if (exec.memoryKb && exec.memoryKb > 0) {
-      statMemory.textContent = exec.memoryKb >= 1024
-        ? `${(exec.memoryKb / 1024).toFixed(1)} MB`
-        : `${exec.memoryKb} KB`;
-    } else {
-      statMemory.textContent = '—';
-    }
+    statCompileTime.textContent = cMs != null ? `${cMs} ms` : '—';
+    statEngine.textContent      = exec.engine || data.language?.name || 'Judge0 Sandbox';
 
     const exitCode = exec.exitCode ?? data.exitCode ?? null;
     if (exitCode !== null) {
-      statExitCode.textContent  = String(exitCode);
-      statExitCode.style.color  = exitCode === 0 ? 'var(--color-success)' : 'var(--color-error)';
-    } else {
-      statExitCode.textContent = '—';
-      statExitCode.style.color = '';
+      statExitCode.textContent = String(exitCode);
+      statExitCode.style.color = exitCode === 0 ? 'var(--color-success)' : 'var(--color-error)';
     }
 
-    let outputHtml = '';
-    const compileOutput = exec.compileOutput || data.compileOutput || '';
-    const stdout        = exec.stdout  || data.output      || '';
-    const stderr        = exec.stderr  || data.errorOutput || '';
-
-    if (compileOutput) {
-      outputHtml += `<span class="compile-chunk"><i class="fa-solid fa-gears" style="margin-right:5px"></i>Compiler output:\n${UI.escapeHtml(compileOutput)}</span>\n`;
-    }
+    const stdout = exec.stdout || data.output || '';
+    const stderr = exec.stderr || data.errorOutput || '';
 
     if (stdout) {
-      outputHtml += `<span class="stdout-chunk">${UI.escapeHtml(stdout)}</span>`;
+      const outSpan = document.createElement('span');
+      outSpan.style.color = 'var(--text-color, #c9d1d9)';
+      outSpan.textContent = stdout;
+      terminalText.appendChild(outSpan);
     }
 
     if (stderr) {
-      outputHtml += `\n<span class="stderr-chunk">⚠ stderr:\n${UI.escapeHtml(stderr)}</span>`;
+      const errSpan = document.createElement('div');
+      errSpan.style.color = '#f85149';
+      errSpan.style.marginTop = '4px';
+      errSpan.textContent = stderr;
+      terminalText.appendChild(errSpan);
     }
 
-    if (!stdout && !stderr && !compileOutput) {
-      outputHtml = `<span class="stdout-chunk" style="color:var(--text-muted)">(no output)</span>`;
-    }
+    const exitDiv = document.createElement('div');
+    exitDiv.style.marginTop = '12px';
+    exitDiv.style.fontWeight = 'bold';
+    exitDiv.style.color = exitCode === 0 ? '#3fb950' : '#f85149';
+    exitDiv.textContent = exitCode === 0 
+      ? '=== Code Execution Successful ===' 
+      : `=== Process exited with code ${exitCode} ===`;
+    terminalScreen.appendChild(exitDiv);
 
-    if (exitCode === 0) {
-      outputHtml += `\n<div class="terminal-exit-success">=== Code Execution Successful ===</div>`;
-    } else if (exitCode !== null) {
-      outputHtml += `\n<div class="terminal-exit-error">=== Process exited with code ${exitCode} ===</div>`;
-    }
-
-    consoleOutput.innerHTML = outputHtml;
+    consoleOutput.scrollTop = consoleOutput.scrollHeight;
   }
 
   /* =========================================================
@@ -599,10 +610,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    if (window.innerWidth <= 900) {
-      setResponsiveView('output');
-    }
-
+    if (window.innerWidth <= 900) setResponsiveView('output');
     setLoadingState(true, 'Analyzing…');
 
     try {
@@ -632,9 +640,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (err) {
       setLoadingState(false);
-      if (err.name !== 'AbortError') {
-        showToast(`Analysis failed: ${err.message}`, 'error');
-      }
+      showToast(`Analysis failed: ${err.message}`, 'error');
     }
   }
 
@@ -802,7 +808,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* =========================================================
-     LOADING STATE
+     LOADING STATE & TABS
   ========================================================= */
   function setLoadingState(loading, label = 'Compiling…') {
     isRunning = loading;
@@ -818,9 +824,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  /* =========================================================
-     TAB NAVIGATION
-  ========================================================= */
   tabButtons.forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
@@ -850,12 +853,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  document.getElementById('expandAstBtn').addEventListener('click', () => {
-    AstVisualizer.expandAll(document.getElementById('astVisualTree'));
-  });
-  document.getElementById('collapseAstBtn').addEventListener('click', () => {
-    AstVisualizer.collapseAll(document.getElementById('astVisualTree'));
-  });
+  document.getElementById('expandAstBtn').addEventListener('click', () => AstVisualizer.expandAll(document.getElementById('astVisualTree')));
+  document.getElementById('collapseAstBtn').addEventListener('click', () => AstVisualizer.collapseAll(document.getElementById('astVisualTree')));
   document.getElementById('toggleRawJsonBtn').addEventListener('click', () => {
     const tree = document.getElementById('astVisualTree');
     const json = document.getElementById('astJsonViewer');
@@ -865,15 +864,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /* =========================================================
-     SNIPPET LOADER
+     SNIPPETS & CONTROLS
   ========================================================= */
   snippetSelect.addEventListener('change', () => {
     if (snippetSelect.value) loadSnippet(snippetSelect.value);
   });
 
-  /* =========================================================
-     CLEAR EDITOR
-  ========================================================= */
   clearEditorBtn.addEventListener('click', () => {
     if (!codeEditor.value.trim() || confirm('Clear the editor?')) {
       codeEditor.value = '';
@@ -884,10 +880,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  /* =========================================================
-     CLEAR CONSOLE
-  ========================================================= */
   function clearConsole() {
+    if (terminalScreen) terminalScreen.remove();
+    terminalScreen = null;
     consoleOutput.innerHTML = `<div class="console-placeholder">
       <div class="placeholder-icon"><i class="fa-solid fa-terminal"></i></div>
       <h3>Console Cleared</h3>
@@ -907,15 +902,12 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast('Console cleared.', 'info');
   });
 
-  /* =========================================================
-     COPY BUTTONS
-  ========================================================= */
   copyCodeBtn.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(codeEditor.value);
       showToast('Code copied to clipboard!', 'success');
     } catch {
-      showToast('Could not copy — try selecting and copying manually.', 'warning');
+      showToast('Could not copy manually.', 'warning');
     }
   });
 
@@ -928,9 +920,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  /* =========================================================
-     FILE UPLOAD
-  ========================================================= */
   fileUploadInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -940,59 +929,32 @@ document.addEventListener('DOMContentLoaded', () => {
       UI.syncLineNumbers(codeEditor, lineNumbers);
       updateFileInfo();
       fileNameDisplay.textContent = file.name;
-      const ext = '.' + file.name.split('.').pop().toLowerCase();
-      const matched = allLanguages.find(l =>
-        Array.isArray(l.extensions)
-          ? l.extensions.some(e2 => e2.toLowerCase() === ext)
-          : (l.extension || '').toLowerCase() === ext
-      );
-      if (matched) {
-        languageSelect.value = matched.id;
-        updateFileInfo();
-        showToast(`Detected ${matched.name} from file extension.`, 'success');
-      }
       triggerAutoDetection(evt.target.result);
     };
-    reader.onerror = () => showToast('Failed to read file.', 'error');
     reader.readAsText(file);
     e.target.value = '';
   });
 
-  /* =========================================================
-     FILE DOWNLOAD
-  ========================================================= */
   function downloadCode() {
     const text = codeEditor.value;
-    if (!text.trim()) {
-      showToast('Nothing to download.', 'warning');
-      return;
-    }
+    if (!text.trim()) return;
     const selectedId = languageSelect.value;
     const lang = allLanguages.find(l => l.id === selectedId);
-    const ext  = lang
-      ? (lang.extension || (Array.isArray(lang.extensions) ? lang.extensions[0] : '.txt'))
-      : (currentDetection?.detected?.extension || '.txt');
-    const filename = `main${ext}`;
+    const ext  = lang ? (lang.extension || '.txt') : '.txt';
     const blob = new Blob([text], { type: 'text/plain' });
     const a    = document.createElement('a');
     a.href     = URL.createObjectURL(blob);
-    a.download = filename;
+    a.download = `main${ext}`;
     a.click();
     URL.revokeObjectURL(a.href);
-    showToast(`Downloaded as ${filename}`, 'success');
   }
 
   downloadBtn.addEventListener('click', downloadCode);
 
-  /* =========================================================
-     THEME TOGGLE
-  ========================================================= */
   themeToggleBtn.addEventListener('click', () => {
     document.body.classList.toggle('theme-light');
     const isLight = document.body.classList.contains('theme-light');
-    themeToggleBtn.innerHTML = isLight
-      ? '<i class="fa-solid fa-sun"></i>'
-      : '<i class="fa-solid fa-moon"></i>';
+    themeToggleBtn.innerHTML = isLight ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
     localStorage.setItem('polycompile-theme', isLight ? 'light' : 'dark');
   });
 
@@ -1001,86 +963,42 @@ document.addEventListener('DOMContentLoaded', () => {
     themeToggleBtn.innerHTML = '<i class="fa-solid fa-sun"></i>';
   }
 
-  /* =========================================================
-     EVIDENCE MODAL
-  ========================================================= */
   detectionInfoBtn.addEventListener('click', () => {
-    if (!currentDetection) {
-      showToast('No detection data yet. Type some code first.', 'info');
-      return;
-    }
-    const d = currentDetection;
-    document.getElementById('evidenceSummary').textContent =
-      `${d.detected?.name || '?'} detected with ${d.confidence || 0}% confidence (${d.paradigm || '—'} paradigm).`;
-
-    const candidatesList = document.getElementById('candidatesList');
-    candidatesList.innerHTML = '';
-    for (const c of (d.candidates || [])) {
-      const card = document.createElement('div');
-      card.className = 'candidate-card';
-      card.innerHTML = `<span class="candidate-name">${UI.escapeHtml(c.name)}</span><span class="candidate-pct">${c.percentage}%</span>`;
-      candidatesList.appendChild(card);
-    }
-
-    const reasoningList = document.getElementById('reasoningList');
-    reasoningList.innerHTML = '';
-    for (const r of (d.reasoning || [])) {
-      const li = document.createElement('li');
-      li.textContent = r;
-      reasoningList.appendChild(li);
-    }
-
+    if (!currentDetection) return;
     evidenceModal.classList.add('open');
   });
 
   closeEvidenceBtn.addEventListener('click', () => evidenceModal.classList.remove('open'));
   evidenceModal.addEventListener('click', e => { if (e.target === evidenceModal) evidenceModal.classList.remove('open'); });
 
-  /* =========================================================
-     KEYBOARD SHORTCUTS MODAL
-  ========================================================= */
   keyboardShortcutsBtn.addEventListener('click', () => shortcutsModal.classList.add('open'));
   closeShortcutsBtn.addEventListener('click', () => shortcutsModal.classList.remove('open'));
   shortcutsModal.addEventListener('click', e => { if (e.target === shortcutsModal) shortcutsModal.classList.remove('open'); });
 
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      evidenceModal.classList.remove('open');
-      shortcutsModal.classList.remove('open');
-    }
-  });
-
-  /* =========================================================
-     LANGUAGE CHANGE
-  ========================================================= */
   languageSelect.addEventListener('change', () => {
     updateFileInfo();
     if (languageSelect.value !== 'auto') scheduleAutoDetection();
   });
 
   /* =========================================================
-     RESIZABLE PANELS
+     PANEL RESIZE
   ========================================================= */
   let isResizing = false;
-  let startX     = 0;
-  let startWidth = 0;
+  let startX = 0, startWidth = 0;
 
   resizeHandle.addEventListener('mousedown', (e) => {
     isResizing = true;
-    startX     = e.clientX;
+    startX = e.clientX;
     startWidth = editorPanel.offsetWidth;
     resizeHandle.classList.add('dragging');
     document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
     e.preventDefault();
   });
 
   document.addEventListener('mousemove', (e) => {
     if (!isResizing) return;
-    const dx       = e.clientX - startX;
-    const totalW   = workspaceContainer.offsetWidth;
-    const newWidth = Math.min(Math.max(startWidth + dx, 280), totalW - 200);
-    editorPanel.style.width = newWidth + 'px';
+    const dx = e.clientX - startX;
+    editorPanel.style.width = Math.min(Math.max(startWidth + dx, 280), workspaceContainer.offsetWidth - 200) + 'px';
   });
 
   document.addEventListener('mouseup', () => {
@@ -1088,30 +1006,9 @@ document.addEventListener('DOMContentLoaded', () => {
       isResizing = false;
       resizeHandle.classList.remove('dragging');
       document.body.style.cursor = '';
-      document.body.style.userSelect = '';
     }
   });
 
-  resizeHandle.addEventListener('touchstart', (e) => {
-    isResizing = true;
-    startX     = e.touches[0].clientX;
-    startWidth = editorPanel.offsetWidth;
-    e.preventDefault();
-  }, { passive: false });
-
-  document.addEventListener('touchmove', (e) => {
-    if (!isResizing) return;
-    const dx       = e.touches[0].clientX - startX;
-    const totalW   = workspaceContainer.offsetWidth;
-    const newWidth = Math.min(Math.max(startWidth + dx, 280), totalW - 200);
-    editorPanel.style.width = newWidth + 'px';
-  }, { passive: false });
-
-  document.addEventListener('touchend', () => { isResizing = false; });
-
-  /* =========================================================
-     RESPONSIVE PANEL VIEW SWITCHER
-  ========================================================= */
   const viewBtnEditor = document.getElementById('viewBtnEditor');
   const viewBtnOutput = document.getElementById('viewBtnOutput');
   const viewBtnSplit  = document.getElementById('viewBtnSplit');
@@ -1130,36 +1027,11 @@ document.addEventListener('DOMContentLoaded', () => {
   if (viewBtnSplit)  viewBtnSplit.addEventListener('click',  () => setResponsiveView('split'));
 
   /* =========================================================
-     GLOBAL KEYBOARD SHORTCUTS
-  ========================================================= */
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'l' && (e.ctrlKey || e.metaKey) && document.activeElement !== codeEditor) {
-      e.preventDefault();
-      clearConsole();
-    }
-    if (e.key === 's' && (e.ctrlKey || e.metaKey) && document.activeElement !== codeEditor) {
-      e.preventDefault();
-      downloadCode();
-    }
-    if (e.key === '/' && (e.ctrlKey || e.metaKey) && document.activeElement !== codeEditor) {
-      e.preventDefault();
-      inspectPhases();
-    }
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && document.activeElement !== codeEditor) {
-      e.preventDefault();
-      runCode();
-    }
-  });
-
-  /* =========================================================
-     ACTION BUTTONS
+     ACTION BUTTONS & INIT
   ========================================================= */
   runBtn.addEventListener('click', runCode);
   inspectPhasesBtn.addEventListener('click', inspectPhases);
 
-  /* =========================================================
-     BOOT
-  ========================================================= */
   UI.syncLineNumbers(codeEditor, lineNumbers);
   updateFileInfo();
   initializeData();
