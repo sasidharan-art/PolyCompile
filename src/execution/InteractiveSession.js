@@ -8,7 +8,6 @@ class InteractiveSession {
     this.ws = ws;
     this.process = null;
     this.tempDir = null;
-    this.isAlive = true;
 
     this.ws.on('message', (msg) => this.handleMessage(msg));
     this.ws.on('close', () => this.cleanup());
@@ -38,47 +37,63 @@ class InteractiveSession {
   }
 
   async startExecution(sourceCode, languageId, timeoutMs) {
-    this.tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'polycompile-'));
+    this.tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'poly-run-'));
     const lang = (languageId || 'python').toLowerCase();
 
     let cmd = '';
     let args = [];
 
+    // Universal Language Dispatcher
     if (lang.includes('python')) {
-      const file = path.join(this.tempDir, 'main.py');
-      fs.writeFileSync(file, sourceCode);
+      const f = path.join(this.tempDir, 'main.py');
+      fs.writeFileSync(f, sourceCode);
       cmd = 'python3';
-      args = ['-u', file];
+      args = ['-u', f];
     } else if (lang === 'c') {
-      const src = path.join(this.tempDir, 'main.c');
-      const bin = path.join(this.tempDir, 'main');
-      fs.writeFileSync(src, sourceCode);
-      const compile = spawn('gcc', [src, '-o', bin]);
-      await new Promise((res, rej) => {
-        let errBuf = '';
-        compile.stderr.on('data', d => errBuf += d.toString());
-        compile.on('close', code => code === 0 ? res() : rej(new Error(errBuf || 'Compilation error')));
-      });
+      const f = path.join(this.tempDir, 'main.c');
+      const bin = path.join(this.tempDir, 'out_c');
+      fs.writeFileSync(f, sourceCode);
+      await this.compileCommand('gcc', [f, '-o', bin]);
       cmd = bin;
-      args = [];
-    } else if (lang === 'cpp') {
-      const src = path.join(this.tempDir, 'main.cpp');
-      const bin = path.join(this.tempDir, 'main');
-      fs.writeFileSync(src, sourceCode);
-      const compile = spawn('g++', [src, '-o', bin]);
-      await new Promise((res, rej) => {
-        let errBuf = '';
-        compile.stderr.on('data', d => errBuf += d.toString());
-        compile.on('close', code => code === 0 ? res() : rej(new Error(errBuf || 'Compilation error')));
-      });
+    } else if (lang === 'cpp' || lang === 'c++') {
+      const f = path.join(this.tempDir, 'main.cpp');
+      const bin = path.join(this.tempDir, 'out_cpp');
+      fs.writeFileSync(f, sourceCode);
+      await this.compileCommand('g++', [f, '-o', bin]);
       cmd = bin;
-      args = [];
+    } else if (lang === 'java') {
+      const f = path.join(this.tempDir, 'Main.java');
+      fs.writeFileSync(f, sourceCode);
+      await this.compileCommand('javac', [f]);
+      cmd = 'java';
+      args = ['-cp', this.tempDir, 'Main'];
+    } else if (lang === 'javascript' || lang === 'nodejs') {
+      const f = path.join(this.tempDir, 'main.js');
+      fs.writeFileSync(f, sourceCode);
+      cmd = 'node';
+      args = [f];
+    } else if (lang === 'go') {
+      const f = path.join(this.tempDir, 'main.go');
+      fs.writeFileSync(f, sourceCode);
+      cmd = 'go';
+      args = ['run', f];
+    } else if (lang === 'rust') {
+      const f = path.join(this.tempDir, 'main.rs');
+      const bin = path.join(this.tempDir, 'out_rs');
+      fs.writeFileSync(f, sourceCode);
+      await this.compileCommand('rustc', [f, '-o', bin]);
+      cmd = bin;
+    } else if (lang === 'ruby') {
+      const f = path.join(this.tempDir, 'main.rb');
+      fs.writeFileSync(f, sourceCode);
+      cmd = 'ruby';
+      args = [f];
     } else {
-      // Fallback command
-      const file = path.join(this.tempDir, 'script.py');
-      fs.writeFileSync(file, sourceCode);
+      // General Scripting Fallback
+      const f = path.join(this.tempDir, 'script.py');
+      fs.writeFileSync(f, sourceCode);
       cmd = 'python3';
-      args = ['-u', file];
+      args = ['-u', f];
     }
 
     const startTime = Date.now();
@@ -86,13 +101,8 @@ class InteractiveSession {
 
     this.send({ type: 'ready' });
 
-    this.process.stdout.on('data', (data) => {
-      this.send({ type: 'stdout', data: data.toString() });
-    });
-
-    this.process.stderr.on('data', (data) => {
-      this.send({ type: 'stderr', data: data.toString() });
-    });
+    this.process.stdout.on('data', (d) => this.send({ type: 'stdout', data: d.toString() }));
+    this.process.stderr.on('data', (d) => this.send({ type: 'stderr', data: d.toString() }));
 
     this.process.on('close', (code) => {
       this.send({ type: 'exit', code: code || 0, durationMs: Date.now() - startTime });
@@ -110,6 +120,16 @@ class InteractiveSession {
         this.cleanup();
       }
     }, timeoutMs);
+  }
+
+  compileCommand(cmd, args) {
+    return new Promise((resolve, reject) => {
+      const p = spawn(cmd, args, { cwd: this.tempDir });
+      let errBuf = '';
+      p.stderr.on('data', (d) => (errBuf += d.toString()));
+      p.on('close', (code) => (code === 0 ? resolve() : reject(new Error(errBuf || 'Compilation failed'))));
+      p.on('error', (err) => reject(new Error(`Compiler not found: ${cmd}`)));
+    });
   }
 
   cleanup() {
