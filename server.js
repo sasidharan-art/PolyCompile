@@ -13,6 +13,7 @@
 
 const express = require('express');
 const path = require('path');
+const crypto = require('crypto');
 
 const { LANGUAGES, getAllLanguages, PARADIGMS, getLanguageById } = require('./src/compiler/LanguageRegistry');
 const LanguageDetector = require('./src/compiler/LanguageDetector');
@@ -42,6 +43,18 @@ app.get(['/health', '/api/health'], (req, res) => {
     version: '1.0.0',
     supportedLanguagesCount: getAllLanguages().length
   });
+});
+
+// Short-lived, one-purpose ticket for the separately hosted interactive runner.
+app.post('/api/interactive-ticket', (req, res) => {
+  const secret = process.env.INTERACTIVE_TICKET_SECRET;
+  const gatewayUrl = process.env.INTERACTIVE_GATEWAY_URL;
+  if (!secret || !gatewayUrl) {
+    return res.status(503).json({ success: false, error: 'Interactive terminal is not configured on this deployment.' });
+  }
+  const payload = Buffer.from(JSON.stringify({ scope: 'interactive-run', exp: Date.now() + 60_000, nonce: crypto.randomBytes(16).toString('hex') })).toString('base64url');
+  const signature = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+  res.json({ success: true, ticket: `${payload}.${signature}`, gatewayUrl });
 });
 
 // 1. Language Catalog & Taxonomy

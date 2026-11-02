@@ -1728,3 +1728,13 @@ body.theme-light .detection-pill { background: rgba(238,240,248,0.9); }
 @media (min-width: 1400px) {
   .editor-panel { width: 52%; }
 }
+
+/* Interactive terminal: live stdin is entered directly beneath streamed output. */
+#consoleStdinPanel { display: none !important; }
+.interactive-terminal-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; color: #cdd6f4; }
+.interactive-terminal-input-row { position: sticky; bottom: 0; display: flex; align-items: center; gap: 9px; margin-top: 8px; padding: 9px 10px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: 6px; }
+.terminal-prompt { color: #38bdf8; font-weight: 700; }
+.interactive-terminal-input { flex: 1; min-width: 0; color: var(--text-primary); background: transparent; border: 0; outline: 0; font: inherit; }
+.interactive-terminal-input-row button { border: 0; border-radius: 5px; padding: 6px 11px; background: var(--accent-primary, #3b82f6); color: white; cursor: pointer; }
+.terminal-input-echo { color: #7dd3fc; }
+.terminal-system { color: #94a3b8; }

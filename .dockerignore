@@ -14,4 +14,3 @@ runner/*.bak[0-9]
 runner/*.backup
 runner/language-smoke-results.csv
 *.log
-runner/

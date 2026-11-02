@@ -391,10 +391,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const abortRunBtn = document.getElementById('abortRunBtn');
   if (abortRunBtn) {
     abortRunBtn.addEventListener('click', () => {
-      if (currentAbortCtrl) {
-        currentAbortCtrl.abort();
-        showToast('Execution cancelled by user.', 'info');
+      if (interactiveSocket && interactiveSocket.readyState === WebSocket.OPEN) {
+        interactiveSocket.send(JSON.stringify({ type: 'stop' }));
+        interactiveSocket.close();
       }
+      if (currentAbortCtrl) currentAbortCtrl.abort();
+      if (isRunning) setLoadingState(false);
+      showToast('Execution cancelled by user.', 'info');
     });
   }
 
@@ -411,83 +414,105 @@ document.addEventListener('DOMContentLoaded', () => {
   /* =========================================================
      RUN & COMPILE
   ========================================================= */
+  let interactiveSocket = null;
+  let terminalInput = null;
+  let terminalText = null;
+
+  function terminalWrite(text, className = 'stdout-chunk') {
+    if (!terminalText) {
+      consoleOutput.innerHTML = '';
+      terminalText = document.createElement('pre');
+      terminalText.className = 'interactive-terminal-text';
+      consoleOutput.appendChild(terminalText);
+    }
+    const span = document.createElement('span');
+    span.className = className;
+    span.textContent = text;
+    terminalText.appendChild(span);
+    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+  }
+
+  function ensureTerminalInput() {
+    if (terminalInput) return terminalInput;
+    const row = document.createElement('form');
+    row.className = 'interactive-terminal-input-row';
+    row.innerHTML = '<span class="terminal-prompt">›</span><input class="interactive-terminal-input" type="text" autocomplete="off" spellcheck="false" aria-label="Program input" placeholder="Type program input and press Enter…"><button type="submit">Send</button>';
+    consoleOutput.appendChild(row);
+    terminalInput = row.querySelector('input');
+    row.addEventListener('submit', event => {
+      event.preventDefault();
+      if (!terminalInput || !interactiveSocket || interactiveSocket.readyState !== WebSocket.OPEN) return;
+      const value = terminalInput.value;
+      terminalWrite(value + '\n', 'terminal-input-echo');
+      interactiveSocket.send(JSON.stringify({ type: 'input', data: value }));
+      terminalInput.value = '';
+      terminalInput.focus();
+    });
+    return terminalInput;
+  }
+
   async function runCode() {
     if (isRunning) {
-      // Cancel in-flight request
+      if (interactiveSocket && interactiveSocket.readyState === WebSocket.OPEN) {
+        interactiveSocket.send(JSON.stringify({ type: 'stop' }));
+        interactiveSocket.close();
+      }
       if (currentAbortCtrl) currentAbortCtrl.abort();
+      setLoadingState(false);
+      showToast('Execution stopped.', 'info');
       return;
     }
-
-    const sourceCode  = codeEditor.value;
+    const sourceCode = codeEditor.value;
     const selectedLang = languageSelect.value;
-    const stdin       = stdinInput.value;
-    const preferLocal = preferLocalCheck.checked;
-
-    if (!sourceCode.trim()) {
-      showToast('Please enter source code first.', 'warning');
-      return;
-    }
-
-    // On mobile / tablet viewports, switch view to output panel so user sees results
-    if (window.innerWidth <= 900) {
-      setResponsiveView('output');
-    }
-
+    if (!sourceCode.trim()) return showToast('Please enter source code first.', 'warning');
+    if (window.innerWidth <= 900) setResponsiveView('output');
     switchTab('consoleTab');
-    setLoadingState(true);
-    hideAllBanners();
-    startTimeoutBar(MAX_RUN_TIMEOUT_MS);
-
+    setLoadingState(true, 'Starting…'); hideAllBanners(); startTimeoutBar(MAX_RUN_TIMEOUT_MS);
+    consoleOutput.innerHTML = '';
+    terminalText = document.createElement('pre'); terminalText.className = 'interactive-terminal-text'; consoleOutput.appendChild(terminalText);
+    terminalInput = null;
     currentAbortCtrl = new AbortController();
-
     try {
-      const res = await fetch('/api/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sourceCode,
-          languageId: selectedLang === 'auto' ? null : selectedLang,
-          stdin,
-          preferLocal
-        }),
-        signal: currentAbortCtrl.signal
-      });
-
-      const data = await res.json();
-      setLoadingState(false);
-      clearTimeoutBar();
-
-      if (data.success) {
-        displayExecutionResults(data);
-        if (data.compilerPhases) populateCompilerPhases(data.compilerPhases);
-        UI.renderDiagnostics(data.diagnostics || [],
-          document.getElementById('diagnosticsContainer'),
-          document.getElementById('diagCountBadge'));
-        UI.renderTaxonomy(data.language, data.detection?.paradigmDescription);
-      } else {
-        handleExecutionError(data);
+      let languageId = selectedLang;
+      if (!languageId || languageId === 'auto') {
+        const detectedRes = await fetch('/api/detect', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sourceCode}), signal:currentAbortCtrl.signal });
+        const detected = await detectedRes.json();
+        languageId = detected.detected?.id || detected.language?.id;
       }
+      if (!languageId) throw new Error('Could not determine the program language. Select a language manually.');
+      const ticketRes = await fetch('/api/interactive-ticket', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}', signal:currentAbortCtrl.signal });
+      const ticketData = await ticketRes.json();
+      if (!ticketRes.ok || !ticketData.success) throw new Error(ticketData.error || 'Interactive execution is not configured.');
+      const wsUrl = new URL(ticketData.gatewayUrl);
+      wsUrl.searchParams.set('ticket', ticketData.ticket);
+      if (wsUrl.protocol === 'https:') wsUrl.protocol = 'wss:'; else if (wsUrl.protocol === 'http:') wsUrl.protocol = 'ws:';
+      interactiveSocket = new WebSocket(wsUrl.toString());
+      interactiveSocket.onopen = () => interactiveSocket.send(JSON.stringify({ type:'start', sourceCode, languageId, timeoutMs:60000 }));
+      interactiveSocket.onmessage = event => {
+        let message; try { message = JSON.parse(event.data); } catch { return; }
+        if (message.type === 'ready') { terminalWrite(`[${message.language || languageId}] Running…\n`, 'terminal-system'); ensureTerminalInput().focus(); setLoadingState(true, 'Running…'); }
+        else if (message.type === 'stdout') terminalWrite(message.data || '');
+        else if (message.type === 'stderr') terminalWrite(message.data || '', 'stderr-chunk');
+        else if (message.type === 'error') { terminalWrite(`\n${message.message}\n`, 'stderr-chunk'); setLoadingState(false); }
+        else if (message.type === 'exit') {
+          statExitCode.textContent = String(message.code);
+          statExitCode.style.color = message.code === 0 ? 'var(--color-success)' : 'var(--color-error)';
+          statEngine.textContent = 'PolyCompile Interactive Sandbox';
+          if (message.durationMs != null) statExecTime.textContent = `${message.durationMs} ms`;
+          terminalWrite(`\n[Process exited with code ${message.code}]\n`, 'terminal-system');
+          if (message.code === 0) showBanner(successBanner, successBannerMsg, 'Program completed successfully.');
+          else showBanner(runtimeErrorBanner, runtimeErrorMsg, `Program exited with code ${message.code}.`);
+          setLoadingState(false); clearTimeoutBar();
+          if (terminalInput) terminalInput.disabled = true;
+        }
+      };
+      interactiveSocket.onerror = () => { terminalWrite('\nInteractive connection failed. Check the execution gateway configuration.\n', 'stderr-chunk'); setLoadingState(false); clearTimeoutBar(); };
+      interactiveSocket.onclose = () => { if (isRunning) { setLoadingState(false); clearTimeoutBar(); } };
     } catch (err) {
-      setLoadingState(false);
-      clearTimeoutBar();
-
-      if (err.name === 'AbortError') {
-        showToast('Execution cancelled.', 'info');
-        clearConsole();
-        return;
-      }
-
-      // Network / connection error
-      showBanner(dockerErrorBanner, dockerErrorMsg,
-        `Cannot connect to the server. Make sure the backend is running on port 3000.\n\nTechnical: ${err.message}`);
-      consoleOutput.innerHTML = `<div class="service-error-card">
-        <strong>Connection Error</strong>
-        <p>Could not reach the PolyCompile server. Make sure it is running (<code>node server.js</code> or <code>npm start</code>).</p>
-        <details><summary>Technical details</summary><pre>${UI.escapeHtml(err.message)}</pre></details>
-      </div>`;
-    } finally {
-      currentAbortCtrl = null;
-    }
+      setLoadingState(false); clearTimeoutBar();
+      terminalWrite(`${err.message}\n`, 'stderr-chunk');
+      showBanner(dockerErrorBanner, dockerErrorMsg, 'Interactive execution service is not available.');
+    } finally { currentAbortCtrl = null; }
   }
 
   function handleExecutionError(data) {

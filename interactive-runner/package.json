@@ -1,0 +1,8 @@
+{
+  "name": "polycompile-interactive-runner",
+  "version": "1.0.0",
+  "private": true,
+  "main": "gateway.js",
+  "scripts": {"start": "node gateway.js"},
+  "dependencies": {"ws": "^8.18.3"}
+}
