@@ -175,7 +175,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function populateLanguagesDropdown(paradigms, languages) {
-    // Group by category
     const groups = {};
     for (const lang of languages) {
       const cat = lang.category || 'General';
@@ -189,7 +188,6 @@ document.addEventListener('DOMContentLoaded', () => {
       for (const l of langs) {
         const option = document.createElement('option');
         option.value = l.id;
-        // Show name + primary extension
         const ext = l.extension || (Array.isArray(l.extensions) ? l.extensions[0] : '');
         option.textContent = `${l.name}${ext ? '  ' + ext : ''}`;
         optgroup.appendChild(option);
@@ -230,7 +228,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   codeEditor.addEventListener('keydown', (e) => {
-    // Tab → 4 spaces
     if (e.key === 'Tab') {
       e.preventDefault();
       const start = codeEditor.selectionStart;
@@ -240,27 +237,22 @@ document.addEventListener('DOMContentLoaded', () => {
       UI.syncLineNumbers(codeEditor, lineNumbers);
       updateFileInfo();
     }
-    // Ctrl+Enter → Run
     else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       runCode();
     }
-    // Ctrl+/ → Inspect
     else if (e.key === '/' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       inspectPhases();
     }
-    // Ctrl+S → Download
     else if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       downloadCode();
     }
-    // Ctrl+L → Clear console
     else if (e.key === 'l' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       clearConsole();
     }
-    // Ctrl+D → Duplicate line
     else if (e.key === 'd' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       duplicateLine();
@@ -283,7 +275,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const code = codeEditor.value;
     charCountDisplay.textContent = `${code.length.toLocaleString()} chars`;
     lineCountDisplay.textContent = `${(code.split('\n').length).toLocaleString()} lines`;
-    // Update file extension badge from selected language
     const selectedId = languageSelect.value;
     const lang = allLanguages.find(l => l.id === selectedId);
     const ext = lang ? (lang.extension || (Array.isArray(lang.extensions) ? lang.extensions[0] : '')) : '';
@@ -297,9 +288,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function duplicateLine() {
     const pos   = codeEditor.selectionStart;
-    const lines  = codeEditor.value.split('\n');
     const linesBefore = codeEditor.value.substring(0, pos).split('\n');
     const lineIndex   = linesBefore.length - 1;
+    const lines = codeEditor.value.split('\n');
     const currentLine = lines[lineIndex] || '';
     lines.splice(lineIndex + 1, 0, currentLine);
     codeEditor.value = lines.join('\n');
@@ -380,14 +371,9 @@ document.addEventListener('DOMContentLoaded', () => {
     timeoutFill.classList.remove('warning');
   }
 
-  // Hook abort button on timeout progress bar
   const abortRunBtn = document.getElementById('abortRunBtn');
   if (abortRunBtn) {
     abortRunBtn.addEventListener('click', () => {
-      if (interactiveSocket && interactiveSocket.readyState === WebSocket.OPEN) {
-        interactiveSocket.send(JSON.stringify({ type: 'stop' }));
-        interactiveSocket.close();
-      }
       if (currentAbortCtrl) currentAbortCtrl.abort();
       if (isRunning) setLoadingState(false);
       showToast('Execution cancelled by user.', 'info');
@@ -405,102 +391,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* =========================================================
-     RUN & COMPILE
+     RUN & COMPILE (DIRECT BATCH COMPILATION)
   ========================================================= */
-  /* =========================================================
-     RUN & COMPILE (PROGRAMIZ DIRECT INTERACTIVE TERMINAL)
-  ========================================================= */
-  let interactiveSocket = null;
-  let terminalScreen = null;
-  let terminalText = null;
-  let inlineInputWrapper = null;
-  let inlineInput = null;
-
-  function ensureProgramizTerminal() {
-    if (terminalScreen && terminalScreen.isConnected) return;
-    consoleOutput.innerHTML = '';
-
-    terminalScreen = document.createElement('div');
-    terminalScreen.className = 'programiz-terminal';
-    consoleOutput.appendChild(terminalScreen);
-
-    terminalText = document.createElement('span');
-    terminalText.className = 'terminal-text';
-    terminalScreen.appendChild(terminalText);
-
-    inlineInputWrapper = document.createElement('span');
-    inlineInputWrapper.className = 'terminal-input-wrapper';
-    inlineInputWrapper.innerHTML = '<input type="text" class="terminal-inline-input" autocomplete="off" spellcheck="false" aria-label="Terminal input" />';
-    terminalScreen.appendChild(inlineInputWrapper);
-
-    inlineInput = inlineInputWrapper.querySelector('input');
-    inlineInput.style.width = '1ch';
-
-    // Auto-adjust width as user types
-    inlineInput.addEventListener('input', () => {
-      inlineInput.style.width = Math.max(1, inlineInput.value.length + 1) + 'ch';
-      consoleOutput.scrollTop = consoleOutput.scrollHeight;
-    });
-
-    // Enter sends input directly into the program's stdin
-    inlineInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const val = inlineInput.value;
-
-        // Echo directly into the terminal stream
-        const echo = document.createElement('span');
-        echo.className = 'terminal-input-echo';
-        echo.textContent = val + '\n';
-        terminalText.appendChild(echo);
-
-        // Reset input box
-        inlineInput.value = '';
-        inlineInput.style.width = '1ch';
-
-        // Send to running process
-        if (interactiveSocket && interactiveSocket.readyState === WebSocket.OPEN) {
-          interactiveSocket.send(JSON.stringify({ type: 'input', data: val }));
-        }
-
-        consoleOutput.scrollTop = consoleOutput.scrollHeight;
-      }
-    });
-  }
-
-  function appendTerminalStream(chunk, className = 'terminal-stream-chunk') {
-    ensureProgramizTerminal();
-
-    const span = document.createElement('span');
-    span.className = className;
-    span.textContent = chunk;
-    terminalText.appendChild(span);
-
-    // Keep the active input element at the very end of the stream
-    if (inlineInputWrapper) {
-      terminalScreen.appendChild(inlineInputWrapper);
-    }
-    consoleOutput.scrollTop = consoleOutput.scrollHeight;
-    focusTerminal();
-  }
-
-  function focusTerminal() {
-    if (inlineInput && inlineInput.isConnected && !inlineInput.disabled) {
-      inlineInput.focus();
-    }
-  }
-
-  // Clicking anywhere in the output window focuses the terminal input
-  if (consoleOutput) {
-    consoleOutput.addEventListener('click', focusTerminal);
-  }
-
   async function runCode() {
     if (isRunning) {
-      if (interactiveSocket && interactiveSocket.readyState === WebSocket.OPEN) {
-        interactiveSocket.send(JSON.stringify({ type: 'stop' }));
-        interactiveSocket.close();
-      }
       if (currentAbortCtrl) currentAbortCtrl.abort();
       setLoadingState(false);
       clearTimeoutBar();
@@ -519,20 +413,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.innerWidth <= 900) setResponsiveView('output');
     switchTab('consoleTab');
     hideAllBanners();
-    setLoadingState(true, 'Running…');
+    setLoadingState(true, 'Compiling & Running…');
     startTimeoutBar(MAX_RUN_TIMEOUT_MS);
 
-    // Initialize Programiz-style terminal
-    terminalScreen = null;
-    terminalText = null;
-    inlineInputWrapper = null;
-    inlineInput = null;
-    ensureProgramizTerminal();
-
-    // Immediately focus cursor right inside the terminal — zero extra clicks needed!
-    focusTerminal();
-    setTimeout(focusTerminal, 20);
-    setTimeout(focusTerminal, 100);
+    consoleOutput.innerHTML = '<div class="terminal-stream-chunk"><i class="fa-solid fa-spinner fa-spin"></i> Compiling code...</div>';
 
     currentAbortCtrl = new AbortController();
 
@@ -549,88 +433,22 @@ document.addEventListener('DOMContentLoaded', () => {
         languageId = detected.detected?.id || detected.language?.id || '';
       }
 
-      // Connect to interactive WebSocket session
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/session`;
-
-      let socketConnected = false;
-      interactiveSocket = new WebSocket(wsUrl);
-
-      interactiveSocket.onopen = () => {
-        socketConnected = true;
-        interactiveSocket.send(JSON.stringify({
-          type: 'start',
-          sourceCode,
-          languageId,
-          timeoutMs: MAX_RUN_TIMEOUT_MS
-        }));
-      };
-
-      interactiveSocket.onmessage = (event) => {
-        let message;
-        try { message = JSON.parse(event.data); } catch { return; }
-
-        if (message.type === 'ready') {
-          setLoadingState(true, 'Running…');
-          focusTerminal();
-        } else if (message.type === 'stdout') {
-          appendTerminalStream(message.data || '', 'terminal-stream-chunk');
-        } else if (message.type === 'stderr') {
-          appendTerminalStream(message.data || '', 'terminal-err-chunk');
-        } else if (message.type === 'error') {
-          appendTerminalStream(`\n${message.message}\n`, 'terminal-err-chunk');
-          setLoadingState(false);
-          clearTimeoutBar();
-        } else if (message.type === 'exit') {
-          // Remove active inline input wrapper
-          if (inlineInputWrapper && inlineInputWrapper.parentElement) {
-            inlineInputWrapper.remove();
-          }
-
-          const exitDiv = document.createElement('div');
-          exitDiv.className = message.code === 0 ? 'terminal-exit-success' : 'terminal-exit-error';
-          exitDiv.textContent = message.code === 0
-            ? '\n=== Code Execution Successful ==='
-            : `\n=== Process exited with code ${message.code} ===`;
-          terminalScreen.appendChild(exitDiv);
-
-          statExitCode.textContent = String(message.code);
-          statExitCode.style.color = message.code === 0 ? 'var(--color-success)' : 'var(--color-error)';
-          if (message.durationMs != null) {
-            statExecTime.textContent = `${message.durationMs} ms`;
-            statExecTime.style.color = 'var(--color-success)';
-          }
-          statEngine.textContent = 'PolyCompile Terminal';
-
-          setLoadingState(false);
-          clearTimeoutBar();
-          consoleOutput.scrollTop = consoleOutput.scrollHeight;
-        }
-      };
-
-      interactiveSocket.onerror = () => {
-        if (!socketConnected) {
-          fallbackBatchRun(sourceCode, languageId);
-        } else {
-          appendTerminalStream('\n[Interactive connection closed]\n', 'terminal-system-msg');
-          setLoadingState(false);
-          clearTimeoutBar();
-        }
-      };
-
-      interactiveSocket.onclose = () => {
-        if (isRunning && socketConnected) {
-          setLoadingState(false);
-          clearTimeoutBar();
-        }
-      };
+      // Execute directly via the batch compiler engine
+      await fallbackBatchRun(sourceCode, languageId);
 
     } catch (err) {
       if (err.name === 'AbortError') {
         showToast('Execution stopped.', 'info');
       } else {
-        fallbackBatchRun(sourceCode, selectedLang);
+        handleExecutionError({
+          success: false,
+          error: err.message || 'Execution error',
+          userMessage: 'Compilation request failed.'
+        });
       }
+    } finally {
+      setLoadingState(false);
+      clearTimeoutBar();
     }
   }
 
@@ -663,6 +481,7 @@ document.addEventListener('DOMContentLoaded', () => {
       clearTimeoutBar();
     }
   }
+
   function handleExecutionError(data) {
     const isDockerDown = data.errorType === 'execution_service_unavailable';
     const isTimeout    = data.status === 'TIMEOUT';
@@ -671,7 +490,7 @@ document.addEventListener('DOMContentLoaded', () => {
       showBanner(timeoutBanner);
     } else if (isDockerDown) {
       showBanner(dockerErrorBanner, dockerErrorMsg,
-        data.userMessage || 'Execution sandbox is currently busy. Try enabling "Local Runtime".');
+        data.userMessage || 'Execution sandbox is busy. Please try again.');
     } else {
       showBanner(compilationErrorBanner, errorBannerTitle, 'Execution Error');
       if (errorBannerMsg) errorBannerMsg.textContent = data.userMessage || data.error || 'The request could not be completed.';
@@ -693,7 +512,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function displayExecutionResults(data) {
     const exec = data.execution || {};
 
-    // Accurate Execution & Compile Time formatting
     const ms = exec.executionTimeMs != null ? exec.executionTimeMs : (data.durationMs != null ? data.durationMs : null);
     const timedOut = exec.timedOut || data.timedOut || false;
 
@@ -731,12 +549,10 @@ document.addEventListener('DOMContentLoaded', () => {
       statExitCode.style.color = '';
     }
 
-    // Build output HTML
     let outputHtml = '';
     const compileOutput = exec.compileOutput || data.compileOutput || '';
     const stdout        = exec.stdout  || data.output      || '';
     const stderr        = exec.stderr  || data.errorOutput || '';
-    const compileFailed = exec.compileFailed || data.compileFailed || false;
 
     if (compileOutput) {
       outputHtml += `<span class="compile-chunk"><i class="fa-solid fa-gears" style="margin-right:5px"></i>Compiler output:\n${UI.escapeHtml(compileOutput)}</span>\n`;
@@ -817,7 +633,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function populateCompilerPhases(phases) {
     if (!phases) return;
 
-    // Phase 1: Lexical
     const p1 = phases.phase1_lexical || phases.lexical;
     if (p1) {
       document.getElementById('lexTotalTokens').textContent  = p1.totalTokens || p1.tokens?.length || 0;
@@ -827,7 +642,6 @@ document.addEventListener('DOMContentLoaded', () => {
       renderTokensTable(p1.tokens || []);
     }
 
-    // Phase 2: Syntax / AST
     const p2 = phases.phase2_syntax || phases.syntax;
     if (p2) {
       document.getElementById('astTotalNodes').textContent = p2.metrics?.totalAstNodes || 0;
@@ -837,7 +651,6 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('astJsonViewer').textContent = JSON.stringify(p2.ast, null, 2);
     }
 
-    // Phase 3: Semantic
     const p3 = phases.phase3_semantic || phases.semantic;
     if (p3) {
       document.getElementById('semTotalSymbols').textContent  = p3.symbolTable?.length || 0;
@@ -846,7 +659,6 @@ document.addEventListener('DOMContentLoaded', () => {
       renderSymbolTable(p3.symbolTable || []);
     }
 
-    // Phase 4: IR / CFG
     const p4 = phases.phase4_intermediate || phases.intermediate;
     if (p4) {
       document.getElementById('tacCodeBlock').textContent = (p4.tac || []).join('\n') || '// No TAC generated';
@@ -854,7 +666,6 @@ document.addEventListener('DOMContentLoaded', () => {
       renderBasicBlocks(p4.basicBlocks || []);
     }
 
-    // Phase 5: CodeGen
     const p5 = phases.phase5_optimization || phases.optimization;
     if (p5) {
       document.getElementById('asmCodeBlock').textContent = p5.assemblyCode || '; No assembly generated';
@@ -1011,7 +822,6 @@ document.addEventListener('DOMContentLoaded', () => {
     tabPanes.forEach(p => p.classList.toggle('active', p.id === tabId));
   }
 
-  // Sub-tabs
   subTabButtons.forEach(btn => {
     btn.addEventListener('click', () => {
       const parent   = btn.closest('.tab-pane');
@@ -1021,7 +831,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Token filters
   document.querySelectorAll('.filter-chip').forEach(chip => {
     chip.addEventListener('click', () => {
       document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
@@ -1033,7 +842,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // AST controls
   document.getElementById('expandAstBtn').addEventListener('click', () => {
     AstVisualizer.expandAll(document.getElementById('astVisualTree'));
   });
@@ -1123,9 +931,7 @@ document.addEventListener('DOMContentLoaded', () => {
       codeEditor.value = evt.target.result;
       UI.syncLineNumbers(codeEditor, lineNumbers);
       updateFileInfo();
-      // Set file name
       fileNameDisplay.textContent = file.name;
-      // Auto-detect language from extension
       const ext = '.' + file.name.split('.').pop().toLowerCase();
       const matched = allLanguages.find(l =>
         Array.isArray(l.extensions)
@@ -1141,7 +947,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     reader.onerror = () => showToast('Failed to read file.', 'error');
     reader.readAsText(file);
-    // Reset so same file can be re-uploaded
     e.target.value = '';
   });
 
@@ -1183,7 +988,6 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem('polycompile-theme', isLight ? 'light' : 'dark');
   });
 
-  // Restore theme preference
   if (localStorage.getItem('polycompile-theme') === 'light') {
     document.body.classList.add('theme-light');
     themeToggleBtn.innerHTML = '<i class="fa-solid fa-sun"></i>';
@@ -1231,7 +1035,6 @@ document.addEventListener('DOMContentLoaded', () => {
   closeShortcutsBtn.addEventListener('click', () => shortcutsModal.classList.remove('open'));
   shortcutsModal.addEventListener('click', e => { if (e.target === shortcutsModal) shortcutsModal.classList.remove('open'); });
 
-  // Global ESC to close modals
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       evidenceModal.classList.remove('open');
@@ -1281,7 +1084,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Touch resize support
   resizeHandle.addEventListener('touchstart', (e) => {
     isResizing = true;
     startX     = e.touches[0].clientX;
@@ -1300,7 +1102,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('touchend', () => { isResizing = false; });
 
   /* =========================================================
-     RESPONSIVE PANEL VIEW SWITCHER (Mobile & Tablet)
+     RESPONSIVE PANEL VIEW SWITCHER
   ========================================================= */
   const viewBtnEditor = document.getElementById('viewBtnEditor');
   const viewBtnOutput = document.getElementById('viewBtnOutput');
