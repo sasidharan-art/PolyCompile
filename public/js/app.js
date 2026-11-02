@@ -459,62 +459,78 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       if (currentAbortCtrl) currentAbortCtrl.abort();
       setLoadingState(false);
+      clearTimeoutBar();
       showToast('Execution stopped.', 'info');
       return;
     }
+
     const sourceCode = codeEditor.value;
     const selectedLang = languageSelect.value;
-    if (!sourceCode.trim()) return showToast('Please enter source code first.', 'warning');
+
+    if (!sourceCode.trim()) {
+      showToast('Please enter source code first.', 'warning');
+      return;
+    }
+
     if (window.innerWidth <= 900) setResponsiveView('output');
     switchTab('consoleTab');
-    setLoadingState(true, 'Starting…'); hideAllBanners(); startTimeoutBar(MAX_RUN_TIMEOUT_MS);
+    hideAllBanners();
+    setLoadingState(true, 'Compiling...');
+    startTimeoutBar(MAX_RUN_TIMEOUT_MS);
     consoleOutput.innerHTML = '';
-    terminalText = document.createElement('pre'); terminalText.className = 'interactive-terminal-text'; consoleOutput.appendChild(terminalText);
-    terminalInput = null;
-    currentAbortCtrl = new AbortController();
-    try {
-      let languageId = selectedLang;
-      if (!languageId || languageId === 'auto') {
-        const detectedRes = await fetch('/api/detect', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sourceCode}), signal:currentAbortCtrl.signal });
-        const detected = await detectedRes.json();
-        languageId = detected.detected?.id || detected.language?.id;
-      }
-      if (!languageId) throw new Error('Could not determine the program language. Select a language manually.');
-      const ticketRes = await fetch('/api/interactive-ticket', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}', signal:currentAbortCtrl.signal });
-      const ticketData = await ticketRes.json();
-      if (!ticketRes.ok || !ticketData.success) throw new Error(ticketData.error || 'Interactive execution is not configured.');
-      const wsUrl = new URL(ticketData.gatewayUrl);
-      wsUrl.searchParams.set('ticket', ticketData.ticket);
-      if (wsUrl.protocol === 'https:') wsUrl.protocol = 'wss:'; else if (wsUrl.protocol === 'http:') wsUrl.protocol = 'ws:';
-      interactiveSocket = new WebSocket(wsUrl.toString());
-      interactiveSocket.onopen = () => interactiveSocket.send(JSON.stringify({ type:'start', sourceCode, languageId, timeoutMs:60000 }));
-      interactiveSocket.onmessage = event => {
-        let message; try { message = JSON.parse(event.data); } catch { return; }
-        if (message.type === 'ready') { terminalWrite(`[${message.language || languageId}] Running…\n`, 'terminal-system'); ensureTerminalInput().focus(); setLoadingState(true, 'Running…'); }
-        else if (message.type === 'stdout') terminalWrite(message.data || '');
-        else if (message.type === 'stderr') terminalWrite(message.data || '', 'stderr-chunk');
-        else if (message.type === 'error') { terminalWrite(`\n${message.message}\n`, 'stderr-chunk'); setLoadingState(false); }
-        else if (message.type === 'exit') {
-          statExitCode.textContent = String(message.code);
-          statExitCode.style.color = message.code === 0 ? 'var(--color-success)' : 'var(--color-error)';
-          statEngine.textContent = 'PolyCompile Interactive Sandbox';
-          if (message.durationMs != null) statExecTime.textContent = `${message.durationMs} ms`;
-          terminalWrite(`\n[Process exited with code ${message.code}]\n`, 'terminal-system');
-          if (message.code === 0) showBanner(successBanner, successBannerMsg, 'Program completed successfully.');
-          else showBanner(runtimeErrorBanner, runtimeErrorMsg, `Program exited with code ${message.code}.`);
-          setLoadingState(false); clearTimeoutBar();
-          if (terminalInput) terminalInput.disabled = true;
-        }
-      };
-      interactiveSocket.onerror = () => { terminalWrite('\nInteractive connection failed. Check the execution gateway configuration.\n', 'stderr-chunk'); setLoadingState(false); clearTimeoutBar(); };
-      interactiveSocket.onclose = () => { if (isRunning) { setLoadingState(false); clearTimeoutBar(); } };
-    } catch (err) {
-      setLoadingState(false); clearTimeoutBar();
-      terminalWrite(`${err.message}\n`, 'stderr-chunk');
-      showBanner(dockerErrorBanner, dockerErrorMsg, 'Interactive execution service is not available.');
-    } finally { currentAbortCtrl = null; }
-  }
 
+    currentAbortCtrl = new AbortController();
+
+    try {
+      const response = await fetch('/api/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceCode,
+          languageId: selectedLang === 'auto' ? '' : selectedLang,
+          stdin: stdinInput ? stdinInput.value : '',
+          preferLocal: Boolean(preferLocalCheck && preferLocalCheck.checked)
+        }),
+        signal: currentAbortCtrl.signal
+      });
+
+      let data;
+
+      try {
+        data = await response.json();
+      } catch {
+        data = {
+          success: false,
+          error: 'The execution server returned an invalid response.',
+          userMessage: 'Unable to read the execution server response.',
+          errorType: 'server_error'
+        };
+      }
+
+      if (!response.ok || !data.success) {
+        handleExecutionError(data);
+        return;
+      }
+
+      displayExecutionResults(data);
+
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        showToast('Execution stopped.', 'info');
+      } else {
+        handleExecutionError({
+          success: false,
+          error: err.message || 'Network request failed.',
+          userMessage: 'Could not connect to the execution server. Please try again.',
+          errorType: 'server_error'
+        });
+      }
+    } finally {
+      currentAbortCtrl = null;
+      setLoadingState(false);
+      clearTimeoutBar();
+    }
+  }
   function handleExecutionError(data) {
     const isDockerDown = data.errorType === 'execution_service_unavailable';
     const isTimeout    = data.status === 'TIMEOUT';
