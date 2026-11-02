@@ -1,0 +1,871 @@
+[
+  {
+    "id": "c",
+    "name": "C",
+    "extensions": [
+      ".c"
+    ],
+    "category": "Systems & compiled",
+    "paradigm": "Structured procedural",
+    "compiled": true,
+    "sourceFile": "main.c",
+    "compile": [
+      "gcc",
+      "/work/main.c",
+      "-O0",
+      "-std=c11",
+      "-o",
+      "/exec/program"
+    ],
+    "run": [
+      "/exec/program"
+    ]
+  },
+  {
+    "id": "cpp",
+    "name": "C++",
+    "extensions": [
+      ".cpp",
+      ".cc",
+      ".cxx"
+    ],
+    "category": "Systems & compiled",
+    "paradigm": "Multi-paradigm / structured",
+    "compiled": true,
+    "sourceFile": "main.cpp",
+    "compile": [
+      "g++",
+      "/work/main.cpp",
+      "-O0",
+      "-std=c++17",
+      "-o",
+      "/exec/program"
+    ],
+    "run": [
+      "/exec/program"
+    ]
+  },
+  {
+    "id": "java",
+    "name": "Java",
+    "extensions": [
+      ".java"
+    ],
+    "category": "Managed & JVM",
+    "paradigm": "Object-oriented / structured",
+    "compiled": true,
+    "sourceFile": "Main.java",
+    "compile": [
+      "sh",
+      "-lc",
+      "mkdir -p /exec/java-classes && cd /work && javac -d /exec/java-classes Main.java"
+    ],
+    "run": [
+      "java",
+      "-cp",
+      "/exec/java-classes",
+      "Main"
+    ]
+  },
+  {
+    "id": "python",
+    "name": "Python 3",
+    "extensions": [
+      ".py"
+    ],
+    "category": "Scripting & general-purpose",
+    "paradigm": "Multi-paradigm / structured",
+    "compiled": false,
+    "sourceFile": "main.py",
+    "run": [
+      "python3",
+      "-I",
+      "/work/main.py"
+    ]
+  },
+  {
+    "id": "javascript",
+    "name": "JavaScript (Node.js)",
+    "extensions": [
+      ".js",
+      ".mjs"
+    ],
+    "category": "Scripting & general-purpose",
+    "paradigm": "Multi-paradigm",
+    "compiled": false,
+    "sourceFile": "main.js",
+    "run": [
+      "node",
+      "/work/main.js"
+    ]
+  },
+  {
+    "id": "typescript",
+    "name": "TypeScript",
+    "extensions": [
+      ".ts"
+    ],
+    "category": "Scripting & general-purpose",
+    "paradigm": "Statically typed JavaScript",
+    "compiled": true,
+    "sourceFile": "main.ts",
+    "run": [
+      "sh",
+      "-lc",
+      "cd /work && tsc main.ts --target ES2022 --module commonjs --outDir /exec/tsout && node /exec/tsout/main.js"
+    ]
+  },
+  {
+    "id": "go",
+    "name": "Go",
+    "extensions": [
+      ".go"
+    ],
+    "category": "Systems & compiled",
+    "paradigm": "Structured / concurrent",
+    "compiled": true,
+    "sourceFile": "main.go",
+    "run": [
+      "sh",
+      "-lc",
+      "cd /work && go run main.go"
+    ]
+  },
+  {
+    "id": "rust",
+    "name": "Rust",
+    "extensions": [
+      ".rs"
+    ],
+    "category": "Systems & compiled",
+    "paradigm": "Systems / multi-paradigm",
+    "compiled": true,
+    "sourceFile": "main.rs",
+    "run": [
+      "sh",
+      "-lc",
+      "rustc /work/main.rs -o /exec/program && /exec/program"
+    ]
+  },
+  {
+    "id": "ruby",
+    "name": "Ruby",
+    "extensions": [
+      ".rb"
+    ],
+    "category": "Scripting & general-purpose",
+    "paradigm": "Object-oriented",
+    "compiled": false,
+    "sourceFile": "main.rb",
+    "run": [
+      "ruby",
+      "/work/main.rb"
+    ]
+  },
+  {
+    "id": "php",
+    "name": "PHP",
+    "extensions": [
+      ".php"
+    ],
+    "category": "Scripting & general-purpose",
+    "paradigm": "Web / general-purpose scripting",
+    "compiled": false,
+    "sourceFile": "main.php",
+    "run": [
+      "php",
+      "/work/main.php"
+    ]
+  },
+  {
+    "id": "perl",
+    "name": "Perl",
+    "extensions": [
+      ".pl"
+    ],
+    "category": "Scripting & general-purpose",
+    "paradigm": "Text / general-purpose scripting",
+    "compiled": false,
+    "sourceFile": "main.pl",
+    "run": [
+      "perl",
+      "/work/main.pl"
+    ]
+  },
+  {
+    "id": "lua",
+    "name": "Lua",
+    "extensions": [
+      ".lua"
+    ],
+    "category": "Scripting & general-purpose",
+    "paradigm": "Embeddable scripting",
+    "compiled": false,
+    "sourceFile": "main.lua",
+    "run": [
+      "lua",
+      "/work/main.lua"
+    ]
+  },
+  {
+    "id": "bash",
+    "name": "Bash",
+    "extensions": [
+      ".sh"
+    ],
+    "category": "Shell & text processing",
+    "paradigm": "Shell scripting",
+    "compiled": false,
+    "sourceFile": "main.sh",
+    "run": [
+      "bash",
+      "/work/main.sh"
+    ]
+  },
+  {
+    "id": "kotlin",
+    "name": "Kotlin",
+    "extensions": [
+      ".kt",
+      ".kts"
+    ],
+    "category": "Managed & JVM",
+    "paradigm": "Multi-paradigm / JVM",
+    "compiled": true,
+    "sourceFile": "Main.kt",
+    "compile": [
+      "kotlinc",
+      "/work/Main.kt",
+      "-include-runtime",
+      "-d",
+      "/exec/program.jar"
+    ],
+    "run": [
+      "java",
+      "-jar",
+      "/exec/program.jar"
+    ]
+  },
+  {
+    "id": "scala",
+    "name": "Scala",
+    "extensions": [
+      ".scala"
+    ],
+    "category": "Managed & JVM",
+    "paradigm": "Functional / object-oriented JVM",
+    "compiled": true,
+    "sourceFile": "Main.scala",
+    "compile": [
+      "sh",
+      "-lc",
+      "mkdir -p /exec/scala-classes && scalac -d /exec/scala-classes /work/Main.scala"
+    ],
+    "run": [
+      "scala",
+      "-cp",
+      "/exec/scala-classes",
+      "Main"
+    ]
+  },
+  {
+    "id": "csharp",
+    "name": "C#",
+    "extensions": [
+      ".cs"
+    ],
+    "category": "Managed & JVM",
+    "paradigm": "Object-oriented / multi-paradigm",
+    "compiled": true,
+    "sourceFile": "Main.cs",
+    "compile": [
+      "mono-csc",
+      "-out:/exec/program.exe",
+      "/work/Main.cs"
+    ],
+    "run": [
+      "mono",
+      "/exec/program.exe"
+    ]
+  },
+  {
+    "id": "r",
+    "name": "R",
+    "extensions": [
+      ".r",
+      ".R"
+    ],
+    "category": "Scientific & data",
+    "paradigm": "Statistical computing",
+    "compiled": false,
+    "sourceFile": "main.R",
+    "run": [
+      "Rscript",
+      "--vanilla",
+      "/work/main.R"
+    ]
+  },
+  {
+    "id": "fortran",
+    "name": "Fortran",
+    "extensions": [
+      ".f90",
+      ".f95",
+      ".f03",
+      ".f08"
+    ],
+    "category": "Scientific & procedural",
+    "paradigm": "Structured procedural / scientific",
+    "compiled": true,
+    "sourceFile": "main.f90",
+    "compile": [
+      "gfortran",
+      "/work/main.f90",
+      "-O0",
+      "-o",
+      "/exec/program"
+    ],
+    "run": [
+      "/exec/program"
+    ]
+  },
+  {
+    "id": "pascal",
+    "name": "Pascal (Free Pascal)",
+    "extensions": [
+      ".pas",
+      ".pp"
+    ],
+    "category": "Systems & compiled",
+    "paradigm": "Structured procedural / object-oriented",
+    "compiled": true,
+    "sourceFile": "main.pas",
+    "compile": [
+      "fpc",
+      "-FE/exec",
+      "-FU/exec",
+      "-o/exec/program",
+      "/work/main.pas"
+    ],
+    "run": [
+      "/exec/program"
+    ]
+  },
+  {
+    "id": "haskell",
+    "name": "Haskell",
+    "extensions": [
+      ".hs"
+    ],
+    "category": "Functional & logic",
+    "paradigm": "Pure functional",
+    "compiled": true,
+    "sourceFile": "main.hs",
+    "compile": [
+      "sh",
+      "-lc",
+      "mkdir -p /exec/ghc && ghc -v0 -outputdir /exec/ghc -o /exec/program /work/main.hs"
+    ],
+    "run": [
+      "/exec/program"
+    ]
+  },
+  {
+    "id": "ocaml",
+    "name": "OCaml",
+    "extensions": [
+      ".ml"
+    ],
+    "category": "Functional & logic",
+    "paradigm": "Functional / multi-paradigm",
+    "compiled": true,
+    "sourceFile": "main.ml",
+    "compile": [
+      "sh",
+      "-lc",
+      "cd /exec && cp /work/main.ml /exec/main.ml && ocamlc -o /exec/program /exec/main.ml"
+    ],
+    "run": [
+      "/exec/program"
+    ]
+  },
+  {
+    "id": "common-lisp",
+    "name": "Common Lisp (SBCL)",
+    "extensions": [
+      ".lisp",
+      ".lsp"
+    ],
+    "category": "Functional & logic",
+    "paradigm": "Multi-paradigm / symbolic",
+    "compiled": false,
+    "sourceFile": "main.lisp",
+    "run": [
+      "sbcl",
+      "--script",
+      "/work/main.lisp"
+    ]
+  },
+  {
+    "id": "scheme",
+    "name": "Scheme (Guile)",
+    "extensions": [
+      ".scm",
+      ".ss"
+    ],
+    "category": "Functional & logic",
+    "paradigm": "Functional / Lisp-family",
+    "compiled": false,
+    "sourceFile": "main.scm",
+    "run": [
+      "guile",
+      "--no-auto-compile",
+      "/work/main.scm"
+    ]
+  },
+  {
+    "id": "tcl",
+    "name": "Tcl",
+    "extensions": [
+      ".tcl"
+    ],
+    "category": "Scripting & general-purpose",
+    "paradigm": "Scripting / event-driven",
+    "compiled": false,
+    "sourceFile": "main.tcl",
+    "run": [
+      "tclsh",
+      "/work/main.tcl"
+    ]
+  },
+  {
+    "id": "sql",
+    "name": "SQL (SQLite)",
+    "extensions": [
+      ".sql"
+    ],
+    "category": "Scientific & data",
+    "paradigm": "Declarative query language (SQLite dialect)",
+    "compiled": false,
+    "sourceFile": "main.sql",
+    "run": [
+      "sqlite3",
+      "-batch",
+      "-bail",
+      ":memory:",
+      ".read /work/main.sql"
+    ]
+  },
+  {
+    "id": "octave",
+    "name": "GNU Octave (MATLAB-like)",
+    "extensions": [
+      ".m"
+    ],
+    "category": "Scientific & data",
+    "paradigm": "Numerical / matrix computing",
+    "compiled": false,
+    "sourceFile": "main.m",
+    "run": [
+      "octave",
+      "--quiet",
+      "--no-gui",
+      "/work/main.m"
+    ]
+  },
+  {
+    "id": "ada",
+    "name": "Ada (GNAT)",
+    "extensions": [
+      ".adb",
+      ".ada"
+    ],
+    "category": "Systems & compiled",
+    "paradigm": "Structured / strongly typed",
+    "compiled": true,
+    "sourceFile": "main.adb",
+    "compile": [
+      "sh",
+      "-lc",
+      "mkdir -p /exec/ada && cd /exec/ada && gnatmake -q -D /exec/ada -o /exec/program /work/main.adb"
+    ],
+    "run": [
+      "/exec/program"
+    ]
+  },
+  {
+    "id": "d",
+    "name": "D",
+    "extensions": [
+      ".d"
+    ],
+    "category": "Systems & compiled",
+    "paradigm": "Systems / multi-paradigm",
+    "compiled": true,
+    "sourceFile": "main.d",
+    "compile": [
+      "gdc",
+      "/work/main.d",
+      "-O0",
+      "-o",
+      "/exec/program"
+    ],
+    "run": [
+      "/exec/program"
+    ]
+  },
+  {
+    "id": "assembly",
+    "name": "x86-64 Assembly (NASM)",
+    "extensions": [
+      ".asm"
+    ],
+    "category": "Low-level & unstructured",
+    "paradigm": "Low-level / unstructured",
+    "compiled": true,
+    "sourceFile": "main.asm",
+    "compile": [
+      "sh",
+      "-lc",
+      "nasm -f elf64 /work/main.asm -o /exec/main.o && ld /exec/main.o -o /exec/program"
+    ],
+    "run": [
+      "/exec/program"
+    ]
+  },
+  {
+    "id": "cobol",
+    "name": "COBOL (GnuCOBOL)",
+    "extensions": [
+      ".cob",
+      ".cbl"
+    ],
+    "category": "Enterprise & legacy",
+    "paradigm": "Procedural / business",
+    "compiled": true,
+    "sourceFile": "main.cob",
+    "compile": [
+      "cobc",
+      "-x",
+      "-o",
+      "/exec/program",
+      "/work/main.cob"
+    ],
+    "run": [
+      "/exec/program"
+    ]
+  },
+  {
+    "id": "prolog",
+    "name": "Prolog (SWI-Prolog)",
+    "extensions": [
+      ".pro"
+    ],
+    "category": "Functional & logic",
+    "paradigm": "Logic programming",
+    "compiled": false,
+    "sourceFile": "main.pro",
+    "run": [
+      "swipl",
+      "-q",
+      "-s",
+      "/work/main.pro",
+      "-g",
+      "main",
+      "-t",
+      "halt"
+    ]
+  },
+  {
+    "id": "verilog",
+    "name": "Verilog",
+    "extensions": [
+      ".v"
+    ],
+    "category": "Hardware description",
+    "paradigm": "Hardware description / simulation",
+    "compiled": true,
+    "sourceFile": "main.v",
+    "compile": [
+      "iverilog",
+      "-g2012",
+      "-o",
+      "/exec/program",
+      "/work/main.v"
+    ],
+    "run": [
+      "vvp",
+      "/exec/program"
+    ]
+  },
+  {
+    "id": "vhdl",
+    "name": "VHDL (GHDL)",
+    "extensions": [
+      ".vhd",
+      ".vhdl"
+    ],
+    "category": "Hardware description",
+    "paradigm": "Hardware description / simulation",
+    "compiled": true,
+    "sourceFile": "main.vhd",
+    "compile": [
+      "sh",
+      "-lc",
+      "mkdir -p /exec/ghdl && ghdl -a --std=08 --workdir=/exec/ghdl /work/main.vhd && ghdl -e --std=08 --workdir=/exec/ghdl main"
+    ],
+    "run": [
+      "ghdl",
+      "-r",
+      "--std=08",
+      "--workdir=/exec/ghdl",
+      "main",
+      "--stop-time=1us"
+    ]
+  },
+  {
+    "id": "zsh",
+    "name": "Zsh",
+    "extensions": [
+      ".zsh"
+    ],
+    "category": "Shell & text processing",
+    "paradigm": "Shell scripting",
+    "compiled": false,
+    "sourceFile": "main.zsh",
+    "run": [
+      "zsh",
+      "/work/main.zsh"
+    ]
+  },
+  {
+    "id": "clojure",
+    "name": "Clojure",
+    "extensions": [
+      ".clj",
+      ".cljc"
+    ],
+    "category": "Functional & logic",
+    "paradigm": "Functional / JVM",
+    "compiled": false,
+    "sourceFile": "main.clj",
+    "run": [
+      "clojure",
+      "/work/main.clj"
+    ]
+  },
+  {
+    "id": "erlang",
+    "name": "Erlang",
+    "extensions": [
+      ".erl"
+    ],
+    "category": "Functional & logic",
+    "paradigm": "Functional / concurrent",
+    "compiled": true,
+    "sourceFile": "main.erl",
+    "compile": [
+      "erlc",
+      "-o",
+      "/exec",
+      "/work/main.erl"
+    ],
+    "run": [
+      "erl",
+      "-noshell",
+      "-pa",
+      "/exec",
+      "-s",
+      "main",
+      "main",
+      "-s",
+      "init",
+      "stop"
+    ]
+  },
+  {
+    "id": "elixir",
+    "name": "Elixir",
+    "extensions": [
+      ".exs",
+      ".ex"
+    ],
+    "category": "Functional & logic",
+    "paradigm": "Functional / concurrent",
+    "compiled": false,
+    "sourceFile": "main.exs",
+    "run": [
+      "elixir",
+      "/work/main.exs"
+    ]
+  },
+  {
+    "id": "awk",
+    "name": "AWK",
+    "extensions": [
+      ".awk"
+    ],
+    "category": "Shell & text processing",
+    "paradigm": "Text processing / scripting",
+    "compiled": false,
+    "sourceFile": "main.awk",
+    "run": [
+      "awk",
+      "-f",
+      "/work/main.awk"
+    ]
+  },
+  {
+    "id": "basic",
+    "name": "BASIC (Bywater)",
+    "extensions": [
+      ".bas"
+    ],
+    "category": "Enterprise & legacy",
+    "paradigm": "Procedural / legacy",
+    "compiled": false,
+    "sourceFile": "main.bas",
+    "run": [
+      "bwbasic",
+      "/work/main.bas"
+    ]
+  },
+  {
+    "id": "brainfuck",
+    "name": "Brainfuck",
+    "extensions": [
+      ".bf"
+    ],
+    "category": "Low-level & unstructured",
+    "paradigm": "Esoteric / minimal unstructured",
+    "compiled": false,
+    "sourceFile": "main.bf",
+    "run": [
+      "node",
+      "/opt/polycompile/brainfuck.js",
+      "/work/main.bf"
+    ]
+  },
+  {
+    "id": "nim",
+    "name": "Nim",
+    "extensions": [
+      ".nim"
+    ],
+    "category": "Systems & compiled",
+    "paradigm": "Statically typed compiled / multi-paradigm",
+    "compiled": true,
+    "sourceFile": "main.nim",
+    "compile": [
+      "nim",
+      "c",
+      "--hints:off",
+      "--verbosity:0",
+      "--nimcache:/exec/nimcache",
+      "-o:/exec/program",
+      "/work/main.nim"
+    ],
+    "run": [
+      "/exec/program"
+    ]
+  },
+  {
+    "id": "forth",
+    "name": "Forth (Gforth)",
+    "extensions": [
+      ".fs",
+      ".forth"
+    ],
+    "category": "Low-level & stack-based",
+    "paradigm": "Concatenative / stack-based",
+    "compiled": false,
+    "sourceFile": "main.fs",
+    "run": [
+      "gforth",
+      "/work/main.fs"
+    ]
+  },
+  {
+    "id": "fish",
+    "name": "Fish shell",
+    "extensions": [
+      ".fish"
+    ],
+    "category": "Shell & text processing",
+    "paradigm": "Interactive / scripting shell",
+    "compiled": false,
+    "sourceFile": "main.fish",
+    "run": [
+      "fish",
+      "/work/main.fish"
+    ]
+  },
+  {
+    "id": "jq",
+    "name": "jq",
+    "extensions": [
+      ".jq"
+    ],
+    "category": "Data & query languages",
+    "paradigm": "JSON query / transformation language",
+    "compiled": false,
+    "sourceFile": "main.jq",
+    "run": [
+      "jq",
+      "-nr",
+      "-f",
+      "/work/main.jq"
+    ]
+  },
+  {
+    "id": "sed",
+    "name": "GNU sed script",
+    "extensions": [
+      ".sed"
+    ],
+    "category": "Shell & text processing",
+    "paradigm": "Stream-editing language",
+    "compiled": false,
+    "sourceFile": "main.sed",
+    "run": [
+      "sed",
+      "-f",
+      "/work/main.sed"
+    ]
+  },
+  {
+    "id": "dash",
+    "name": "POSIX shell (dash)",
+    "extensions": [
+      ".dash",
+      ".posix.sh"
+    ],
+    "category": "Shell & text processing",
+    "paradigm": "POSIX shell scripting",
+    "compiled": false,
+    "sourceFile": "main.dash",
+    "run": [
+      "dash",
+      "/work/main.dash"
+    ]
+  },
+  {
+    "id": "makefile",
+    "name": "GNU Makefile",
+    "extensions": [
+      ".mk",
+      ".makefile",
+      "makefile"
+    ],
+    "category": "Build & automation languages",
+    "paradigm": "Declarative build automation",
+    "compiled": false,
+    "sourceFile": "Makefile",
+    "run": [
+      "make",
+      "-s",
+      "-f",
+      "/work/Makefile"
+    ]
+  }
+]

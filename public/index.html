@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PolyCompile — Multi-Language IDE</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="theme-dark">
+
+  <!-- TOAST NOTIFICATIONS -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- TOP HEADER -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="logo-box">
+        <div class="logo-icon"><i class="fa-solid fa-bolt"></i></div>
+        <div class="logo-text">
+          <h1>PolyCompile</h1>
+          <span class="subtitle">Multi-Language IDE &amp; Compiler</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-center">
+      <div class="detection-pill" id="detectionPill">
+        <span class="pill-label"><i class="fa-solid fa-wand-magic-sparkles"></i> Detected:</span>
+        <span class="pill-lang" id="detectedLangName">—</span>
+        <span class="pill-confidence" id="detectedConfidenceBadge">—%</span>
+        <span class="pill-paradigm" id="detectedParadigmBadge">—</span>
+        <button class="pill-info-btn" id="detectionInfoBtn" title="View Detection Evidence">
+          <i class="fa-solid fa-circle-info"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div class="status-indicator" id="serverStatus">
+        <span class="pulse-dot" id="statusDot"></span>
+        <span class="status-text" id="statusText">Connecting…</span>
+      </div>
+      <button class="icon-btn" id="themeToggleBtn" title="Toggle Theme"><i class="fa-solid fa-moon"></i></button>
+      <button class="icon-btn" id="keyboardShortcutsBtn" title="Keyboard Shortcuts"><i class="fa-solid fa-keyboard"></i></button>
+    </div>
+  </header>
+
+  <!-- TIMEOUT PROGRESS BAR -->
+  <div class="timeout-bar" id="timeoutBar" style="display:none">
+    <div class="timeout-fill" id="timeoutFill"></div>
+    <div class="timeout-info">
+      <span class="timeout-label" id="timeoutLabel"><i class="fa-solid fa-spinner fa-spin"></i> Running… 0s</span>
+      <button class="timeout-abort-btn" id="abortRunBtn" title="Cancel running execution"><i class="fa-solid fa-stop"></i> Cancel</button>
+    </div>
+  </div>
+
+  <!-- RESPONSIVE VIEW SWITCHER (Mobile & Tablet) -->
+  <nav class="responsive-view-bar" id="responsiveViewBar" aria-label="Responsive Panel Switcher">
+    <button class="view-btn active" id="viewBtnEditor" data-view="editor" title="Focus on Code Editor">
+      <i class="fa-solid fa-code"></i> <span>Editor</span>
+    </button>
+    <button class="view-btn" id="viewBtnOutput" data-view="output" title="Focus on Terminal & Phases">
+      <i class="fa-solid fa-terminal"></i> <span>Output</span>
+    </button>
+    <button class="view-btn" id="viewBtnSplit" data-view="split" title="View Editor and Output Split">
+      <i class="fa-solid fa-table-columns"></i> <span>Split</span>
+    </button>
+  </nav>
+
+  <!-- DETECTION EVIDENCE MODAL -->
+  <div class="modal-backdrop" id="evidenceModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-magnifying-glass-chart"></i> Language Detection Analysis</h3>
+        <button class="close-modal-btn" id="closeEvidenceBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="evidence-section">
+          <h4>Detection Result</h4>
+          <p id="evidenceSummary">—</p>
+        </div>
+        <div class="evidence-section">
+          <h4>Confidence Ranking</h4>
+          <div id="candidatesList" class="candidates-grid"></div>
+        </div>
+        <div class="evidence-section">
+          <h4>Matched Syntactic Rules</h4>
+          <ul id="reasoningList" class="evidence-rules-list"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KEYBOARD SHORTCUTS MODAL -->
+  <div class="modal-backdrop" id="shortcutsModal">
+    <div class="modal-card modal-small">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-keyboard"></i> Keyboard Shortcuts</h3>
+        <button class="close-modal-btn" id="closeShortcutsBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="shortcuts-grid">
+          <div class="shortcut-item"><kbd>Ctrl+Enter</kbd><span>Run &amp; Compile</span></div>
+          <div class="shortcut-item"><kbd>Ctrl+L</kbd><span>Clear Console</span></div>
+          <div class="shortcut-item"><kbd>Ctrl+/</kbd><span>Inspect Phases</span></div>
+          <div class="shortcut-item"><kbd>Tab</kbd><span>Indent 4 spaces</span></div>
+          <div class="shortcut-item"><kbd>Ctrl+S</kbd><span>Download File</span></div>
+          <div class="shortcut-item"><kbd>Escape</kbd><span>Close Modals</span></div>
+          <div class="shortcut-item"><kbd>Ctrl+D</kbd><span>Duplicate Line</span></div>
+          <div class="shortcut-item"><kbd>Ctrl+A</kbd><span>Select All Code</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN WORKSPACE -->
+  <main class="workspace-container" id="workspaceContainer">
+
+    <!-- LEFT PANEL: EDITOR -->
+    <section class="editor-panel" id="editorPanel">
+
+      <!-- EDITOR TOOLBAR -->
+      <div class="toolbar">
+        <div class="toolbar-group">
+          <label for="languageSelect" class="toolbar-label">
+            <i class="fa-solid fa-code"></i>
+          </label>
+          <select id="languageSelect" class="custom-select" title="Select Language">
+            <option value="auto">⚡ Auto-Detect</option>
+          </select>
+        </div>
+        <div class="toolbar-group">
+          <label for="snippetSelect" class="toolbar-label">
+            <i class="fa-solid fa-bookmark"></i>
+          </label>
+          <select id="snippetSelect" class="custom-select" title="Load Code Sample">
+            <option value="">Samples…</option>
+          </select>
+        </div>
+        <div class="toolbar-spacer"></div>
+        <div class="toolbar-actions">
+          <label class="action-btn" title="Upload source file">
+            <i class="fa-solid fa-upload"></i>
+            <input type="file" id="fileUploadInput"
+              accept=".c,.cpp,.cc,.cxx,.h,.hpp,.java,.py,.pyw,.js,.mjs,.cjs,.ts,.tsx,.go,.rs,.rb,.php,.pl,.pm,.lua,.sh,.bash,.zsh,.fish,.kt,.kts,.scala,.cs,.r,.R,.hs,.lhs,.ml,.mli,.lisp,.lsp,.cl,.scm,.ss,.sls,.tcl,.sql,.m,.mm,.pas,.pp,.f90,.f95,.f03,.f08,.f,.for,.asm,.s,.cob,.cbl,.pro,.pl,.v,.sv,.vhd,.vhdl,.erl,.hrl,.exs,.ex,.clj,.cljc,.cljs,.nim,.d,.di,.adb,.ads,.ada,.bas,.bf,.b,.awk,.fs,.forth,.4th,.jl,.swift,.cr,.dart,.groovy,.gradle,.vb,.ps1,.rkt,.vsh"
+              style="display:none">
+          </label>
+          <button class="action-btn" id="downloadBtn" title="Download file (Ctrl+S)">
+            <i class="fa-solid fa-download"></i>
+          </button>
+          <button class="action-btn" id="copyCodeBtn" title="Copy code to clipboard">
+            <i class="fa-solid fa-copy"></i>
+          </button>
+          <button class="action-btn" id="clearEditorBtn" title="Clear editor">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- FILE INFO BAR -->
+      <div class="file-info-bar">
+        <span id="fileNameDisplay" class="file-name">untitled</span>
+        <span id="fileExtDisplay" class="ext-badge"></span>
+        <span class="info-sep">|</span>
+        <span id="cursorPosDisplay">Ln 1, Col 1</span>
+        <span class="info-sep">|</span>
+        <span id="charCountDisplay">0 chars</span>
+        <span class="info-sep">|</span>
+        <span id="lineCountDisplay">1 lines</span>
+      </div>
+
+      <!-- CODE EDITOR AREA -->
+      <div class="editor-wrapper">
+        <div class="line-numbers" id="lineNumbers">1</div>
+        <textarea
+          id="codeEditor"
+          spellcheck="false"
+          autocorrect="off"
+          autocapitalize="off"
+          autocomplete="off"
+          data-gramm="false"
+          placeholder="Write or paste code here… Supports 55+ languages including C, C++, Java, Python, JavaScript, TypeScript, Go, Rust, Ruby, PHP, Perl, Lua, Bash, Kotlin, Scala, C#, Haskell, OCaml, Lisp, SQL, R, Assembly, and more."></textarea>
+      </div>
+
+      <!-- EXECUTION BAR -->
+      <div class="execution-bar">
+        <button class="btn btn-run" id="runBtn">
+          <i class="fa-solid fa-play" id="runBtnIcon"></i>
+          <span id="runBtnText">Run &amp; Compile</span>
+          <kbd>Ctrl+Enter</kbd>
+        </button>
+        <button class="btn btn-inspect" id="inspectPhasesBtn">
+          <i class="fa-solid fa-layer-group"></i>
+          <span>Inspect Phases</span>
+          <kbd>Ctrl+/</kbd>
+        </button>
+        <div class="run-options">
+          <label class="toggle-label" title="Use built-in JavaScript/Brainfuck runtime (no Docker needed for JS/BF)">
+            <input type="checkbox" id="preferLocalCheck">
+            <span class="toggle-switch"></span>
+            <span class="toggle-text">Local Runtime</span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <!-- RESIZE HANDLE -->
+    <div class="resize-handle" id="resizeHandle" title="Drag to resize panels">
+      <div class="resize-grip">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: CONSOLE / INSPECTOR -->
+    <section class="inspector-panel" id="inspectorPanel">
+
+      <!-- TAB NAVIGATION -->
+      <div class="inspector-tabs" id="inspectorTabs">
+        <button class="tab-btn active" data-tab="consoleTab" title="Console Output">
+          <i class="fa-solid fa-terminal"></i>
+          <span class="tab-label">Console</span>
+        </button>
+        <button class="tab-btn" data-tab="lexicalTab" title="Phase 1: Lexical Analysis">
+          <i class="fa-solid fa-table-cells"></i>
+          <span class="tab-label">Lexer</span>
+        </button>
+        <button class="tab-btn" data-tab="syntaxTab" title="Phase 2: Syntax / AST">
+          <i class="fa-solid fa-sitemap"></i>
+          <span class="tab-label">AST</span>
+        </button>
+        <button class="tab-btn" data-tab="semanticTab" title="Phase 3: Semantic Analysis">
+          <i class="fa-solid fa-id-card"></i>
+          <span class="tab-label">Semantic</span>
+        </button>
+        <button class="tab-btn" data-tab="intermediateTab" title="Phase 4: IR &amp; CFG">
+          <i class="fa-solid fa-code-compare"></i>
+          <span class="tab-label">IR/CFG</span>
+        </button>
+        <button class="tab-btn" data-tab="optimizationTab" title="Phase 5: CodeGen">
+          <i class="fa-solid fa-microchip"></i>
+          <span class="tab-label">CodeGen</span>
+        </button>
+        <button class="tab-btn" data-tab="diagnosticsTab" title="Diagnostics &amp; Errors">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <span class="tab-label">Diag</span>
+          <span class="badge" id="diagCountBadge" style="display:none">0</span>
+        </button>
+        <button class="tab-btn" data-tab="taxonomyTab" title="Language Taxonomy">
+          <i class="fa-solid fa-book-atlas"></i>
+          <span class="tab-label">Taxonomy</span>
+        </button>
+      </div>
+
+      <!-- TAB CONTENT AREA -->
+      <div class="tab-content-area">
+
+        <!-- === CONSOLE TAB === -->
+        <div class="tab-pane active" id="consoleTab">
+          <div class="console-header">
+            <div class="exec-stats" id="execStats">
+              <span class="stat-item" title="Total execution time">
+                <i class="fa-solid fa-clock"></i>
+                <strong id="statExecTime">—</strong>
+              </span>
+              <span class="stat-item" title="Compile time">
+                <i class="fa-solid fa-gears"></i>
+                <strong id="statCompileTime">—</strong>
+              </span>
+              <span class="stat-item" title="Memory usage">
+                <i class="fa-solid fa-memory"></i>
+                <strong id="statMemory">—</strong>
+              </span>
+              <span class="stat-item" title="Process exit code">
+                <i class="fa-solid fa-hashtag"></i>
+                Exit: <strong id="statExitCode">—</strong>
+              </span>
+              <span class="stat-item" title="Execution engine used">
+                <i class="fa-solid fa-server"></i>
+                <strong id="statEngine">—</strong>
+              </span>
+            </div>
+            <div class="console-actions">
+              <button class="icon-btn-small" id="toggleStdinBtn" title="Toggle Standard Input (stdin)">
+                <i class="fa-solid fa-keyboard"></i>
+              </button>
+              <button class="icon-btn-small" id="copyOutputBtn" title="Copy output to clipboard">
+                <i class="fa-solid fa-copy"></i>
+              </button>
+              <button class="icon-btn-small" id="clearConsoleBtn" title="Clear console (Ctrl+L)">
+                <i class="fa-solid fa-eraser"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- INTEGRATED STDIN IN OUTPUT WINDOW -->
+          <div class="console-stdin-panel" id="consoleStdinPanel">
+            <div class="console-stdin-header" id="stdinToggleHeader">
+              <div class="stdin-header-left">
+                <i class="fa-solid fa-keyboard stdin-icon"></i>
+                <span class="stdin-title">Standard Input (stdin)</span>
+                <span class="stdin-badge" id="stdinBadge">Optional</span>
+              </div>
+              <div class="stdin-header-right">
+                <button type="button" class="stdin-btn-link" id="clearStdinBtn" title="Clear stdin">Clear</button>
+                <i class="fa-solid fa-chevron-down toggle-arrow" id="stdinArrow" title="Toggle stdin"></i>
+              </div>
+            </div>
+            <div class="console-stdin-body open" id="stdinBody">
+              <textarea id="stdinInput" spellcheck="false" placeholder="Enter standard input values here (one per line, e.g. for scanf, cin, input())..." rows="2"></textarea>
+            </div>
+          </div>
+
+          <!-- STATUS BANNERS -->
+          <div class="status-banner timeout-banner" id="timeoutBanner" style="display:none">
+            <i class="fa-solid fa-hourglass-end banner-icon"></i>
+            <div class="banner-content">
+              <strong>Execution Timed Out</strong>
+              <p>Your program exceeded the maximum execution time. Check for infinite loops or reduce input size.</p>
+            </div>
+            <button class="btn-dismiss" onclick="this.parentElement.style.display='none'">✕</button>
+          </div>
+
+          <div class="status-banner error-banner" id="compilationErrorBanner" style="display:none">
+            <i class="fa-solid fa-circle-xmark banner-icon"></i>
+            <div class="banner-content">
+              <strong id="errorBannerTitle">Compilation Error</strong>
+              <p id="errorBannerMsg">An error occurred during compilation.</p>
+            </div>
+            <button class="btn-dismiss" onclick="this.parentElement.style.display='none'">✕</button>
+          </div>
+
+          <div class="status-banner runtime-error-banner" id="runtimeErrorBanner" style="display:none">
+            <i class="fa-solid fa-bug banner-icon"></i>
+            <div class="banner-content">
+              <strong>Runtime Error</strong>
+              <p id="runtimeErrorMsg">Program exited with a non-zero exit code.</p>
+            </div>
+            <button class="btn-dismiss" onclick="this.parentElement.style.display='none'">✕</button>
+          </div>
+
+          <div class="status-banner success-banner" id="successBanner" style="display:none">
+            <i class="fa-solid fa-circle-check banner-icon"></i>
+            <div class="banner-content">
+              <strong>Execution Successful</strong>
+              <p id="successBannerMsg">Program completed with exit code 0.</p>
+            </div>
+            <button class="btn-dismiss" onclick="this.parentElement.style.display='none'">✕</button>
+          </div>
+
+          <div class="status-banner docker-error-banner" id="dockerErrorBanner" style="display:none">
+            <i class="fa-solid fa-triangle-exclamation banner-icon"></i>
+            <div class="banner-content">
+              <strong>Execution Service Notice</strong>
+              <p id="dockerErrorMsg">The execution sandbox is currently busy. Your code analysis and compiler phases are fully functional.</p>
+            </div>
+            <button class="btn-dismiss" onclick="this.parentElement.style.display='none'">✕</button>
+          </div>
+
+          <!-- CONSOLE OUTPUT -->
+          <div class="console-output" id="consoleOutput">
+            <div class="console-placeholder">
+              <div class="placeholder-icon"><i class="fa-solid fa-terminal"></i></div>
+              <h3>Ready to Execute</h3>
+              <p>Write or paste your code in the editor, then press <kbd>Ctrl+Enter</kbd> or click <strong>Run &amp; Compile</strong>.</p>
+              <div class="supported-langs-hint">
+                <span class="hint-label">Supported:</span>
+                <span class="lang-pill">C</span>
+                <span class="lang-pill">C++</span>
+                <span class="lang-pill">Java</span>
+                <span class="lang-pill">Python</span>
+                <span class="lang-pill">JavaScript</span>
+                <span class="lang-pill">Go</span>
+                <span class="lang-pill">Rust</span>
+                <span class="lang-pill">+30 more</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- === PHASE 1: LEXER === -->
+        <div class="tab-pane" id="lexicalTab">
+          <div class="phase-metrics-bar" id="lexerMetricsBar">
+            <div class="metric-card">
+              <span class="metric-title">Total Tokens</span>
+              <span class="metric-value" id="lexTotalTokens">0</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-title">Unique Lexemes</span>
+              <span class="metric-value" id="lexUniqueTokens">0</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-title">Keyword %</span>
+              <span class="metric-value" id="lexKwDensity">0%</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-title">Identifier %</span>
+              <span class="metric-value" id="lexIdDensity">0%</span>
+            </div>
+          </div>
+          <div class="token-filter-bar">
+            <span>Filter:</span>
+            <button class="filter-chip active" data-filter="ALL">All</button>
+            <button class="filter-chip" data-filter="KEYWORD">Keywords</button>
+            <button class="filter-chip" data-filter="IDENTIFIER">Identifiers</button>
+            <button class="filter-chip" data-filter="OPERATOR">Operators</button>
+            <button class="filter-chip" data-filter="DELIMITER">Delimiters</button>
+            <button class="filter-chip" data-filter="NUMBER">Numbers</button>
+            <button class="filter-chip" data-filter="STRING">Strings</button>
+            <button class="filter-chip" data-filter="COMMENT">Comments</button>
+          </div>
+          <div class="table-container">
+            <table class="data-table" id="tokensTable">
+              <thead>
+                <tr><th>#</th><th>Type</th><th>Lexeme Value</th><th>Line</th><th>Col</th><th>Length</th></tr>
+              </thead>
+              <tbody id="tokensTableBody">
+                <tr><td colspan="6" class="empty-cell">Click "Inspect Phases" to tokenize your code.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- === PHASE 2: AST === -->
+        <div class="tab-pane" id="syntaxTab">
+          <div class="phase-metrics-bar">
+            <div class="metric-card">
+              <span class="metric-title">AST Nodes</span>
+              <span class="metric-value" id="astTotalNodes">0</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-title">Tree Depth</span>
+              <span class="metric-value" id="astTreeDepth">0</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-title">Cyclomatic</span>
+              <span class="metric-value" id="astComplexity">1</span>
+            </div>
+          </div>
+          <div class="ast-controls">
+            <button class="btn-subtle" id="expandAstBtn"><i class="fa-solid fa-arrows-alt"></i> Expand All</button>
+            <button class="btn-subtle" id="collapseAstBtn"><i class="fa-solid fa-compress-alt"></i> Collapse All</button>
+            <button class="btn-subtle" id="toggleRawJsonBtn"><i class="fa-solid fa-code"></i> Toggle JSON</button>
+          </div>
+          <div class="ast-visual-container" id="astVisualTree">
+            <div class="empty-state">Run inspection to generate Abstract Syntax Tree.</div>
+          </div>
+          <pre class="json-viewer" id="astJsonViewer" style="display:none"></pre>
+        </div>
+
+        <!-- === PHASE 3: SEMANTIC === -->
+        <div class="tab-pane" id="semanticTab">
+          <div class="phase-metrics-bar">
+            <div class="metric-card">
+              <span class="metric-title">Symbols</span>
+              <span class="metric-value" id="semTotalSymbols">0</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-title">Scopes</span>
+              <span class="metric-value" id="semTotalScopes">0</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-title">Warnings</span>
+              <span class="metric-value" id="semTotalWarnings">0</span>
+            </div>
+          </div>
+          <h4 class="section-title"><i class="fa-solid fa-table"></i> Symbol Table</h4>
+          <div class="table-container">
+            <table class="data-table" id="symbolTable">
+              <thead>
+                <tr><th>Symbol</th><th>Kind</th><th>Type</th><th>Scope</th><th>Line</th><th>References</th></tr>
+              </thead>
+              <tbody id="symbolTableBody">
+                <tr><td colspan="6" class="empty-cell">No symbols recorded.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- === PHASE 4: IR & CFG === -->
+        <div class="tab-pane" id="intermediateTab">
+          <div class="sub-tab-bar">
+            <button class="sub-tab-btn active" data-subtab="tacView">Three-Address Code</button>
+            <button class="sub-tab-btn" data-subtab="quadView">Quadruples Table</button>
+            <button class="sub-tab-btn" data-subtab="cfgView">CFG Basic Blocks</button>
+          </div>
+          <div class="sub-tab-content active" id="tacView">
+            <pre class="ir-code-block" id="tacCodeBlock">// Three-Address Code will appear here after inspection</pre>
+          </div>
+          <div class="sub-tab-content" id="quadView">
+            <table class="data-table" id="quadsTable">
+              <thead><tr><th>#</th><th>Operator</th><th>Arg 1</th><th>Arg 2</th><th>Result</th></tr></thead>
+              <tbody id="quadsTableBody">
+                <tr><td colspan="5" class="empty-cell">No quadruples generated.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="sub-tab-content" id="cfgView">
+            <div class="basic-blocks-grid" id="cfgBlocksContainer">
+              <div class="empty-state">Basic block partition will appear here.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- === PHASE 5: CODEGEN === -->
+        <div class="tab-pane" id="optimizationTab">
+          <div class="sub-tab-bar">
+            <button class="sub-tab-btn active" data-subtab="asmView">x86-64 Assembly</button>
+            <button class="sub-tab-btn" data-subtab="byteView">Stack VM Bytecode</button>
+            <button class="sub-tab-btn" data-subtab="optPassView">Optimizations</button>
+          </div>
+          <div class="sub-tab-content active" id="asmView">
+            <pre class="ir-code-block" id="asmCodeBlock">; x86-64 pseudo-assembly target code</pre>
+          </div>
+          <div class="sub-tab-content" id="byteView">
+            <table class="data-table">
+              <thead><tr><th>Opcode</th><th>Operand</th><th>Stack Semantics</th></tr></thead>
+              <tbody id="bytecodeTableBody">
+                <tr><td colspan="3" class="empty-cell">No bytecode emitted.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="sub-tab-content" id="optPassView">
+            <ul class="optimizations-list" id="optPassList">
+              <li class="empty-item">No optimization passes run yet.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- === DIAGNOSTICS === -->
+        <div class="tab-pane" id="diagnosticsTab">
+          <div id="diagnosticsContainer" class="diagnostics-container">
+            <div class="empty-state-success">
+              <i class="fa-solid fa-circle-check"></i>
+              <p>No errors or warnings reported.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- === TAXONOMY === -->
+        <div class="tab-pane" id="taxonomyTab">
+          <div class="taxonomy-card" id="taxonomyDetails">
+            <div class="taxonomy-badge-row">
+              <span class="paradigm-tag" id="taxoParadigmTag">—</span>
+              <span class="category-tag" id="taxoCategoryTag">—</span>
+            </div>
+            <h2 id="taxoLangTitle">Language Architecture</h2>
+            <p id="taxoDescription">Select or auto-detect a language to view its design philosophy and paradigm classification.</p>
+            <div class="taxonomy-grid">
+              <div class="taxo-item">
+                <h4><i class="fa-solid fa-shapes"></i> Programming Paradigm</h4>
+                <p id="taxoParadigmDesc">—</p>
+              </div>
+              <div class="taxo-item">
+                <h4><i class="fa-solid fa-shield-halved"></i> Memory &amp; Type System</h4>
+                <p id="taxoTypeSystem">—</p>
+              </div>
+              <div class="taxo-item">
+                <h4><i class="fa-solid fa-gear"></i> Target Toolchain</h4>
+                <p id="taxoToolchain">—</p>
+              </div>
+              <div class="taxo-item">
+                <h4><i class="fa-solid fa-file-code"></i> File Extension</h4>
+                <p id="taxoExtension">—</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <script src="js/uiComponents.js"></script>
+  <script src="js/astVisualizer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

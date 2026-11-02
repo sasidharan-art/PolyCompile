@@ -1,0 +1,31 @@
+{
+  "name": "polycompile",
+  "version": "1.0.0",
+  "description": "Unified Multi-Language Compiler & Execution System with Automatic Language Detection",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "prod": "NODE_ENV=production node server.js",
+    "test": "node test.js && node execution-policy.test.js",
+    "verify": "node verify_all.js",
+    "stress": "node complex_runtime_test.js"
+  },
+  "keywords": [
+    "compiler",
+    "multi-language",
+    "language-detection",
+    "ast",
+    "code-execution",
+    "sandbox",
+    "compiler-design"
+  ],
+  "author": "PolyCompile Team",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

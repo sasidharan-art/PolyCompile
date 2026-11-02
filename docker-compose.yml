@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  polycompile:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: polycompile:latest
+    container_name: polycompile_app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1024M

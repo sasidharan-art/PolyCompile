@@ -1,0 +1,17 @@
+node_modules
+npm-debug.log
+PolyCompile*.zip
+*.zip
+.git
+.github
+.env
+.env.*
+!.env.example
+coverage
+runner/test-work
+runner/*.bak
+runner/*.bak[0-9]
+runner/*.backup
+runner/language-smoke-results.csv
+*.log
+runner/

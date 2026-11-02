@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+
+# Local runtime and generated artifacts
+runner/test-work/
+runner/language-smoke-results.csv
+*.bak
+*.bak[0-9]
+*.backup
+*.zip
+coverage/
+.DS_Store
+.env.*
+!.env.example
