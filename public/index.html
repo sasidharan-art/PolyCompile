@@ -285,9 +285,6 @@
               </span>
             </div>
             <div class="console-actions">
-              <button class="icon-btn-small" id="toggleStdinBtn" title="Toggle Standard Input (stdin)">
-                <i class="fa-solid fa-keyboard"></i>
-              </button>
               <button class="icon-btn-small" id="copyOutputBtn" title="Copy output to clipboard">
                 <i class="fa-solid fa-copy"></i>
               </button>
@@ -297,72 +294,8 @@
             </div>
           </div>
 
-          <!-- INTEGRATED STDIN IN OUTPUT WINDOW -->
-          <div class="console-stdin-panel" id="consoleStdinPanel">
-            <div class="console-stdin-header" id="stdinToggleHeader">
-              <div class="stdin-header-left">
-                <i class="fa-solid fa-keyboard stdin-icon"></i>
-                <span class="stdin-title">Standard Input (stdin)</span>
-                <span class="stdin-badge" id="stdinBadge">Optional</span>
-              </div>
-              <div class="stdin-header-right">
-                <button type="button" class="stdin-btn-link" id="clearStdinBtn" title="Clear stdin">Clear</button>
-                <i class="fa-solid fa-chevron-down toggle-arrow" id="stdinArrow" title="Toggle stdin"></i>
-              </div>
-            </div>
-            <div class="console-stdin-body open" id="stdinBody">
-              <textarea id="stdinInput" spellcheck="false" placeholder="Enter standard input values here (one per line, e.g. for scanf, cin, input())..." rows="2"></textarea>
-            </div>
-          </div>
-
-          <!-- STATUS BANNERS -->
-          <div class="status-banner timeout-banner" id="timeoutBanner" style="display:none">
-            <i class="fa-solid fa-hourglass-end banner-icon"></i>
-            <div class="banner-content">
-              <strong>Execution Timed Out</strong>
-              <p>Your program exceeded the maximum execution time. Check for infinite loops or reduce input size.</p>
-            </div>
-            <button class="btn-dismiss" onclick="this.parentElement.style.display='none'">✕</button>
-          </div>
-
-          <div class="status-banner error-banner" id="compilationErrorBanner" style="display:none">
-            <i class="fa-solid fa-circle-xmark banner-icon"></i>
-            <div class="banner-content">
-              <strong id="errorBannerTitle">Compilation Error</strong>
-              <p id="errorBannerMsg">An error occurred during compilation.</p>
-            </div>
-            <button class="btn-dismiss" onclick="this.parentElement.style.display='none'">✕</button>
-          </div>
-
-          <div class="status-banner runtime-error-banner" id="runtimeErrorBanner" style="display:none">
-            <i class="fa-solid fa-bug banner-icon"></i>
-            <div class="banner-content">
-              <strong>Runtime Error</strong>
-              <p id="runtimeErrorMsg">Program exited with a non-zero exit code.</p>
-            </div>
-            <button class="btn-dismiss" onclick="this.parentElement.style.display='none'">✕</button>
-          </div>
-
-          <div class="status-banner success-banner" id="successBanner" style="display:none">
-            <i class="fa-solid fa-circle-check banner-icon"></i>
-            <div class="banner-content">
-              <strong>Execution Successful</strong>
-              <p id="successBannerMsg">Program completed with exit code 0.</p>
-            </div>
-            <button class="btn-dismiss" onclick="this.parentElement.style.display='none'">✕</button>
-          </div>
-
-          <div class="status-banner docker-error-banner" id="dockerErrorBanner" style="display:none">
-            <i class="fa-solid fa-triangle-exclamation banner-icon"></i>
-            <div class="banner-content">
-              <strong>Execution Service Notice</strong>
-              <p id="dockerErrorMsg">The execution sandbox is currently busy. Your code analysis and compiler phases are fully functional.</p>
-            </div>
-            <button class="btn-dismiss" onclick="this.parentElement.style.display='none'">✕</button>
-          </div>
-
-          <!-- CONSOLE OUTPUT -->
-          <div class="console-output" id="consoleOutput">
+          <!-- CONSOLE OUTPUT (PROGRAMIZ STYLE TERMINAL) -->
+          <div class="console-output terminal-window" id="consoleOutput">
             <div class="console-placeholder">
               <div class="placeholder-icon"><i class="fa-solid fa-terminal"></i></div>
               <h3>Ready to Execute</h3>

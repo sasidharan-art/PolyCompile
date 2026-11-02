@@ -12,8 +12,10 @@
  */
 
 const express = require('express');
+const http = require('http');
 const path = require('path');
 const crypto = require('crypto');
+const { WebSocketServer } = require('ws');
 
 const { LANGUAGES, getAllLanguages, PARADIGMS, getLanguageById } = require('./src/compiler/LanguageRegistry');
 const LanguageDetector = require('./src/compiler/LanguageDetector');
@@ -24,10 +26,18 @@ const IntermediateCodeGenerator = require('./src/compiler/IntermediateCode');
 const CodeOptimizer = require('./src/compiler/CodeOptimizer');
 const DiagnosticEngine = require('./src/compiler/DiagnosticEngine');
 const ExecutionManager = require('./src/execution/ExecutionManager');
+const { handleInteractiveSession } = require('./src/execution/InteractiveSession');
 const { SNIPPETS, getAllSnippets } = require('./src/snippets/CodeSnippets');
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
+
+// Setup interactive WebSocket server for real-time streaming stdin/stdout
+const wss = new WebSocketServer({ server, path: '/session' });
+wss.on('connection', (ws, req) => {
+  handleInteractiveSession(ws);
+});
 
 // Code playground requests should remain small; this also protects serverless payload limits.
 app.use(express.json({ limit: '1mb' }));
@@ -45,16 +55,24 @@ app.get(['/health', '/api/health'], (req, res) => {
   });
 });
 
-// Short-lived, one-purpose ticket for the separately hosted interactive runner.
+// Interactive terminal ticket endpoint (supports both remote gateway and built-in WebSocket)
 app.post('/api/interactive-ticket', (req, res) => {
   const secret = process.env.INTERACTIVE_TICKET_SECRET;
   const gatewayUrl = process.env.INTERACTIVE_GATEWAY_URL;
-  if (!secret || !gatewayUrl) {
-    return res.status(503).json({ success: false, error: 'Interactive terminal is not configured on this deployment.' });
+
+  if (secret && gatewayUrl) {
+    const payload = Buffer.from(JSON.stringify({ scope: 'interactive-run', exp: Date.now() + 60_000, nonce: crypto.randomBytes(16).toString('hex') })).toString('base64url');
+    const signature = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+    return res.json({ success: true, ticket: `${payload}.${signature}`, gatewayUrl });
   }
-  const payload = Buffer.from(JSON.stringify({ scope: 'interactive-run', exp: Date.now() + 60_000, nonce: crypto.randomBytes(16).toString('hex') })).toString('base64url');
-  const signature = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
-  res.json({ success: true, ticket: `${payload}.${signature}`, gatewayUrl });
+
+  // Built-in local WebSocket support
+  res.json({
+    success: true,
+    ticket: 'local-session',
+    gatewayUrl: '/session',
+    mode: 'builtin'
+  });
 });
 
 // 1. Language Catalog & Taxonomy
@@ -311,11 +329,12 @@ process.on('unhandledRejection', (reason) => {
 // Start Server
 const HOST = process.env.HOST || '0.0.0.0';
 if (!process.env.VERCEL) {
-  app.listen(PORT, HOST, () => {
+  server.listen(PORT, HOST, () => {
     console.log(`====================================================`);
     console.log(` PolyCompile v2 — http://${HOST}:${PORT}`);
     console.log(` Languages: ${getAllLanguages().length}+ | Auto-detection | Phase Inspection`);
     console.log(` Sandbox: Judge0 CE + Wandbox + Local Runtimes`);
+    console.log(` Terminal: Interactive WebSockets enabled at /session`);
     console.log(`====================================================`);
   });
 }
