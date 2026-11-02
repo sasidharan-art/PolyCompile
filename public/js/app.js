@@ -54,7 +54,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Panels & resize
   const editorPanel    = document.getElementById('editorPanel');
   const resizeHandle   = document.getElementById('resizeHandle');
-  const inspectorPanel = document.getElementById('inspectorPanel');
   const workspaceContainer = document.getElementById('workspaceContainer');
 
   // Timeout bar
@@ -70,8 +69,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const dockerErrorBanner  = document.getElementById('dockerErrorBanner');
   const errorBannerTitle   = document.getElementById('errorBannerTitle');
   const errorBannerMsg     = document.getElementById('errorBannerMsg');
-  const runtimeErrorMsg    = document.getElementById('runtimeErrorMsg');
-  const successBannerMsg   = document.getElementById('successBannerMsg');
   const dockerErrorMsg     = document.getElementById('dockerErrorMsg');
 
   // Tabs
@@ -355,71 +352,27 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* =========================================================
-     INLINE INTERACTIVE TERMINAL ENGINE
+     TRUE INLINE TERMINAL IMPLEMENTATION
   ========================================================= */
   let terminalScreen = null;
-  let terminalText = null;
-  let inlineInputWrapper = null;
-  let inlineInput = null;
   let lastSourceCode = '';
   let lastLanguageId = '';
 
-  function ensureProgramizTerminal() {
-    if (terminalScreen && terminalScreen.isConnected) return;
+  function resetTerminal() {
     consoleOutput.innerHTML = '';
-
     terminalScreen = document.createElement('div');
     terminalScreen.className = 'programiz-terminal';
-    terminalScreen.style.cssText = 'font-family: Consolas, "Courier New", monospace; white-space: pre-wrap; line-height: 1.6; font-size: 14px;';
+    terminalScreen.style.cssText = 'font-family: Consolas, "Courier New", monospace; white-space: pre-wrap; line-height: 1.6; font-size: 14px; color: #c9d1d9;';
     consoleOutput.appendChild(terminalScreen);
-
-    terminalText = document.createElement('span');
-    terminalText.className = 'terminal-text';
-    terminalScreen.appendChild(terminalText);
-
-    inlineInputWrapper = document.createElement('span');
-    inlineInputWrapper.className = 'terminal-input-wrapper';
-    inlineInputWrapper.style.display = 'none';
-    inlineInputWrapper.innerHTML = `<input type="text" class="terminal-inline-input" autocomplete="off" spellcheck="false" 
-      style="background:transparent; border:none; outline:none; color:#58a6ff; font-family:inherit; font-size:inherit; padding:0; margin:0; width:2ch; caret-color:#58a6ff; border-bottom: 1.5px solid #58a6ff;" />`;
-    terminalScreen.appendChild(inlineInputWrapper);
-
-    inlineInput = inlineInputWrapper.querySelector('input');
-
-    inlineInput.addEventListener('input', () => {
-      inlineInput.style.width = Math.max(2, inlineInput.value.length + 1) + 'ch';
-      consoleOutput.scrollTop = consoleOutput.scrollHeight;
-    });
-
-    inlineInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const val = inlineInput.value;
-
-        // Print entered value directly next to the prompt and add newline
-        const echo = document.createElement('span');
-        echo.style.color = '#58a6ff';
-        echo.style.fontWeight = 'bold';
-        echo.textContent = ' ' + val + '\n';
-        terminalText.appendChild(echo);
-
-        inlineInput.value = '';
-        inlineInputWrapper.style.display = 'none';
-
-        // Trigger execution with entered input sent to stdin
-        executeWithStdin(lastSourceCode, lastLanguageId, val + '\n');
-      }
-    });
   }
 
-  function focusTerminal() {
-    if (inlineInput && inlineInputWrapper && inlineInputWrapper.style.display !== 'none') {
-      inlineInput.focus();
-    }
-  }
-
-  if (consoleOutput) {
-    consoleOutput.addEventListener('click', focusTerminal);
+  function resolveLanguage(code, selectVal) {
+    if (selectVal && selectVal !== 'auto') return selectVal;
+    if (code.includes('input(') || code.includes('def ') || code.includes('print(')) return 'python';
+    if (code.includes('#include') || code.includes('printf(') || code.includes('scanf(')) return 'c';
+    if (code.includes('public class') || code.includes('System.out')) return 'java';
+    if (code.includes('cout <<') || code.includes('cin >>')) return 'cpp';
+    return currentDetection?.detected?.id || 'python';
   }
 
   async function runCode() {
@@ -432,8 +385,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const sourceCode = codeEditor.value;
-    const selectedLang = languageSelect.value;
-
     if (!sourceCode.trim()) {
       showToast('Please enter source code first.', 'warning');
       return;
@@ -442,79 +393,71 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.innerWidth <= 900) setResponsiveView('output');
     switchTab('consoleTab');
     hideAllBanners();
-    setLoadingState(true, 'Running…');
-    startTimeoutBar(MAX_RUN_TIMEOUT_MS);
-
-    ensureProgramizTerminal();
-    terminalText.innerHTML = '';
-    if (inlineInputWrapper) inlineInputWrapper.style.display = 'none';
+    resetTerminal();
 
     lastSourceCode = sourceCode;
+    lastLanguageId = resolveLanguage(sourceCode, languageSelect.value);
 
-    let languageId = selectedLang;
-    if (!languageId || languageId === 'auto') {
-      try {
-        const detectedRes = await fetch('/api/detect', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sourceCode }),
-          signal: AbortSignal.timeout(6000)
-        });
-        const detected = await detectedRes.json();
-        languageId = detected.detected?.id || detected.language?.id || '';
-      } catch {
-        languageId = '';
-      }
-    }
-    lastLanguageId = languageId;
-
-    // Detect input commands across all programming languages
-    const requiresInput = /(?:input\s*\(|scanf\s*\(|cin\s*>>|readLine|Scanner|gets\s*\(|fgets\s*\(|read_line|readln|prompt\s*\()/i.test(sourceCode);
+    // Detect if code requests input
+    const requiresInput = /(?:input\s*\(|scanf\s*\(|cin\s*>>|readLine|Scanner|gets\s*\(|fgets\s*\()/i.test(sourceCode);
 
     if (requiresInput) {
+      // Find prompt string
       let promptText = '';
-
-      // Pattern 1: Python input("prompt")
       const pyMatch = sourceCode.match(/input\s*\(\s*["']([^"']*)["']\s*\)/);
-      // Pattern 2: C / C++ printf("prompt") / cout << "prompt"
-      const cMatch = sourceCode.match(/(?:printf\s*\(\s*|cout\s*<<\s*)["']([^"']+)["']/);
-      // Pattern 3: Java System.out.print("prompt")
-      const javaMatch = sourceCode.match(/System\.out\.print(?:ln)?\s*\(\s*["']([^"']+)["']\s*\)/);
+      const cMatch  = sourceCode.match(/printf\s*\(\s*["']([^"']+)["']\s*\)/);
 
-      if (pyMatch && pyMatch[1]) {
-        promptText = pyMatch[1];
-      } else if (cMatch && cMatch[1]) {
-        promptText = cMatch[1];
-      } else if (javaMatch && javaMatch[1]) {
-        promptText = javaMatch[1];
-      } else {
-        promptText = 'Input: ';
-      }
+      if (pyMatch && pyMatch[1]) promptText = pyMatch[1];
+      else if (cMatch && cMatch[1]) promptText = cMatch[1];
+      else promptText = 'Input: ';
 
-      // Display the prompt text directly in the output terminal
-      const pSpan = document.createElement('span');
-      pSpan.style.color = '#3fb950';
-      pSpan.style.fontWeight = '500';
-      pSpan.textContent = promptText;
-      terminalText.appendChild(pSpan);
+      // Render the prompt and input box ON THE SAME LINE
+      const promptLine = document.createElement('div');
+      promptLine.className = 'terminal-prompt-line';
+      promptLine.style.cssText = 'display: flex; align-items: center; flex-wrap: wrap; margin-bottom: 4px;';
 
-      // Place cursor right next to prompt
-      inlineInputWrapper.style.display = 'inline-block';
-      inlineInputWrapper.style.marginLeft = '4px';
-      terminalScreen.appendChild(inlineInputWrapper);
+      const promptSpan = document.createElement('span');
+      promptSpan.style.color = '#3fb950';
+      promptSpan.style.fontWeight = '500';
+      promptSpan.textContent = promptText;
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.autocomplete = 'off';
+      input.spellcheck = false;
+      input.style.cssText = 'background: transparent; border: none; outline: none; color: #58a6ff; font-family: inherit; font-size: inherit; margin-left: 6px; flex: 1; min-width: 50px; caret-color: #58a6ff; border-bottom: 1.5px solid #58a6ff;';
+
+      promptLine.appendChild(promptSpan);
+      promptLine.appendChild(input);
+      terminalScreen.appendChild(promptLine);
+
+      // Auto-focus input
+      input.focus();
+      setTimeout(() => input.focus(), 50);
+
+      // Listen for Enter key
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const val = input.value;
+          input.disabled = true;
+          input.style.borderBottom = 'none';
+
+          // Immediately send value to sandbox
+          executeWithStdin(lastSourceCode, lastLanguageId, val + '\n', promptText);
+        }
+      });
 
       setLoadingState(false);
       clearTimeoutBar();
-      focusTerminal();
-      setTimeout(focusTerminal, 40);
       return;
     }
 
-    // Run directly if no standard input needed
-    executeWithStdin(sourceCode, languageId, '');
+    // Direct execution if no input needed
+    executeWithStdin(sourceCode, lastLanguageId, '', '');
   }
 
-  async function executeWithStdin(sourceCode, languageId, stdinData) {
+  async function executeWithStdin(sourceCode, languageId, stdinData, promptText) {
     setLoadingState(true, 'Running…');
     startTimeoutBar(MAX_RUN_TIMEOUT_MS);
     currentAbortCtrl = new AbortController();
@@ -525,7 +468,7 @@ document.addEventListener('DOMContentLoaded', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sourceCode,
-          languageId: languageId === 'auto' ? '' : languageId,
+          languageId,
           stdin: stdinData,
           preferLocal: Boolean(preferLocalCheck && preferLocalCheck.checked)
         }),
@@ -535,7 +478,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!response.ok || !data.success) {
         handleExecutionError(data);
       } else {
-        displayExecutionResults(data, stdinData);
+        displayExecutionResults(data, promptText);
       }
     } catch (err) {
       handleExecutionError({
@@ -550,7 +493,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function handleExecutionError(data) {
-    ensureProgramizTerminal();
     const errSpan = document.createElement('div');
     errSpan.style.color = '#f85149';
     errSpan.style.marginTop = '8px';
@@ -558,8 +500,7 @@ document.addEventListener('DOMContentLoaded', () => {
     terminalScreen.appendChild(errSpan);
   }
 
-  function displayExecutionResults(data, stdinData) {
-    ensureProgramizTerminal();
+  function displayExecutionResults(data, promptText) {
     const exec = data.execution || {};
 
     const ms = exec.executionTimeMs != null ? exec.executionTimeMs : (data.durationMs != null ? data.durationMs : null);
@@ -581,30 +522,28 @@ document.addEventListener('DOMContentLoaded', () => {
     let stdout = exec.stdout || data.output || '';
     const stderr = exec.stderr || data.errorOutput || '';
 
-    // If terminal already displayed the prompt, strip duplicate prompt from stdout
-    if (stdinData && stdout) {
-      const promptEl = terminalText.querySelector('span');
-      if (promptEl) {
-        const promptStr = promptEl.textContent.trim();
-        if (stdout.startsWith(promptStr)) {
-          stdout = stdout.slice(promptStr.length).replace(/^[\r\n]+/, '');
-        }
+    // Strip duplicate prompt text from output if already displayed
+    if (promptText && stdout) {
+      const cleanPrompt = promptText.trim();
+      if (stdout.startsWith(cleanPrompt)) {
+        stdout = stdout.slice(cleanPrompt.length).replace(/^[\r\n]+/, '');
       }
     }
 
     if (stdout) {
-      const outSpan = document.createElement('span');
-      outSpan.style.color = 'var(--text-color, #c9d1d9)';
-      outSpan.textContent = stdout;
-      terminalText.appendChild(outSpan);
+      const outBlock = document.createElement('div');
+      outBlock.style.color = '#c9d1d9';
+      outBlock.style.marginTop = '4px';
+      outBlock.textContent = stdout;
+      terminalScreen.appendChild(outBlock);
     }
 
     if (stderr) {
-      const errSpan = document.createElement('div');
-      errSpan.style.color = '#f85149';
-      errSpan.style.marginTop = '4px';
-      errSpan.textContent = stderr;
-      terminalText.appendChild(errSpan);
+      const errBlock = document.createElement('div');
+      errBlock.style.color = '#f85149';
+      errBlock.style.marginTop = '4px';
+      errBlock.textContent = stderr;
+      terminalScreen.appendChild(errBlock);
     }
 
     const exitDiv = document.createElement('div');
