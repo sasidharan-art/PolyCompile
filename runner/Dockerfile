@@ -5,7 +5,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Keep the established broad-runtime install layer intact so Docker can reuse
 # the user's existing cache; install only the newly-added runtimes separately.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash zsh dash mawk gawk \
+    bash zsh dash mawk gawk util-linux \
     ca-certificates coreutils make gcc g++ binutils nasm \
     openjdk-17-jdk-headless python3 nodejs npm \
     golang-go rustc ruby php-cli perl lua5.4 \
@@ -31,6 +31,7 @@ RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin runner \
 COPY runner/runner.js /opt/polycompile/runner.js
 COPY runner/brainfuck.js /opt/polycompile/brainfuck.js
 COPY runner/languages.json /opt/polycompile/languages.json
+COPY runner/languages.json /opt/languages.json
 
 RUN chown -R root:root /opt/polycompile \
     && chmod -R 0555 /opt/polycompile

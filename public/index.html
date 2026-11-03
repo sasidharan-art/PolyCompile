@@ -294,23 +294,13 @@
             </div>
           </div>
 
-          <!-- Programiz-style standard input panel: enter values before running. -->
-          <section class="stdin-panel" aria-label="Program input">
-            <div class="stdin-panel-heading">
-              <label for="stdinInput"><i class="fa-solid fa-keyboard"></i> Input (stdin)</label>
-              <span>One value per line · Paste multiple lines if needed</span>
-            </div>
-            <textarea id="stdinInput" class="stdin-input" rows="3" spellcheck="false"
-              placeholder="Enter program input here...&#10;Example:&#10;5&#10;10"></textarea>
-          </section>
-
-          <!-- Output is rendered separately, preserving stdout line order. -->
+          <!-- One terminal displays prompts, typed input, and output in execution order. -->
           <div class="output-panel-heading"><i class="fa-solid fa-terminal"></i> Output</div>
           <div class="console-output terminal-window" id="consoleOutput">
             <div class="console-placeholder">
               <div class="placeholder-icon"><i class="fa-solid fa-terminal"></i></div>
               <h3>Ready to Execute</h3>
-              <p>Write or paste your code in the editor, then press <kbd>Ctrl+Enter</kbd> or click <strong>Run &amp; Compile</strong>.</p>
+              <p>Run your program, then type input in the terminal when it prompts you. Press <kbd>Enter</kbd> to send a line or paste multiple lines; press <kbd>Ctrl+D</kbd> on an empty input line to send EOF.</p>
               <div class="supported-langs-hint">
                 <span class="hint-label">Supported:</span>
                 <span class="lang-pill">C</span>

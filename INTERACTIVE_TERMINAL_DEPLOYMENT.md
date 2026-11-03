@@ -1,42 +1,44 @@
-# PolyCompile true interactive terminal deployment
+# PolyCompile live interactive terminal deployment
 
-## What this adds
+## Expected terminal behaviour
 
-- A console input line that sends input while the program is running.
-- WebSocket streaming for stdout/stderr and process exit events.
-- One fresh execution container per session.
-- No network access inside code-execution containers, non-root execution, read-only root filesystem, CPU/memory/PID limits, and a 60-second maximum runtime.
-- Short-lived HMAC tickets issued by the existing Express service.
+PolyCompile uses one Output terminal for the complete execution transcript. Program prompts, user-entered values, stdout, and stderr appear in the same order as they occur. The program starts before input is requested; input is sent to the running process over WebSocket.
 
-The existing Render web service remains the frontend/API. The interactive execution gateway must run on a Docker-capable Linux host that you control (VPS or equivalent). Render's ordinary Web Service does not provide a Docker daemon/socket to safely launch nested per-session containers.
+- Press **Enter** to send the current input line (including an empty line).
+- Paste multiple lines to send a multi-line stdin block without losing spaces or blank lines.
+- Press **Ctrl+D** on an empty input line to send EOF.
+- The runtime uses a pseudo-terminal (PTY), so prompts without a trailing newline are flushed and shown before the user responds.
+- C `scanf`, C++ `cin` / `getline`, Java `Scanner`, Python `input()`, and equivalent line-based stdin APIs use the same terminal path.
 
-## 1. Build the execution image on the Docker host
+## Architecture and deployment requirement
 
-From the repository root:
+The existing Render Node web service remains the UI and API. It cannot safely launch per-run Docker containers itself. The interactive execution gateway must run on a separate Docker-capable Linux host (VPS or equivalent). The runtime image contains the 47 languages registered in `runner/languages.json`. The compiler dropdown currently has 54 language IDs; 13 IDs (`swift`, `lisp`, `zig`, `julia`, `dart`, `groovy`, `fsharp`, `crystal`, `objectivec`, `vbnet`, `powershell`, `racket`, `vlang`) still need interactive runtime definitions/toolchains. Those entries must not be described as live-interactive until added to the runtime image.
+
+### 1. Build the isolated execution image
+
+From the repository root on the Docker host:
 
 ```bash
 docker build -t polycompile-exec:latest -f runner/Dockerfile .
 ```
 
-## 2. Build the WebSocket gateway image
+### 2. Build the WebSocket gateway image
 
 ```bash
 docker build -t polycompile-interactive-gateway:latest -f interactive-runner/Dockerfile .
 ```
 
-## 3. Create one shared ticket secret
-
-Generate a long random secret (at least 32 random bytes), for example:
+### 3. Generate one shared ticket secret
 
 ```bash
 openssl rand -hex 32
 ```
 
-Set the exact same value in both the Render web service and the gateway host. Do not commit it to Git.
+Use the exact same secret value on the Render web service and the gateway host. Do not commit it to Git.
 
-## 4. Start the gateway on the Docker host
+### 4. Start the gateway on the Docker host
 
-Replace `YOUR_LONG_RANDOM_SECRET` with the generated value. The gateway must be reachable over HTTPS/WSS through a reverse proxy (Caddy/Nginx) with WebSocket upgrade support.
+Replace `YOUR_LONG_RANDOM_SECRET` with the generated value. Put a TLS reverse proxy (Caddy/Nginx) in front of port 8080 and enable WebSocket upgrades. Expose only the reverse proxy publicly.
 
 ```bash
 docker run -d --name polycompile-interactive-gateway --restart unless-stopped \
@@ -49,39 +51,71 @@ docker run -d --name polycompile-interactive-gateway --restart unless-stopped \
   polycompile-interactive-gateway:latest
 ```
 
-**Docker socket warning:** Access to `/var/run/docker.sock` is effectively host-administrator access. Run this gateway only on a dedicated, patched host; do not share that host with sensitive workloads. Restrict inbound access to the reverse proxy and protect the gateway with TLS.
+**Security warning:** access to `/var/run/docker.sock` is effectively host-administrator access. Use a dedicated, patched host; restrict inbound traffic to the reverse proxy; and protect the gateway with TLS. The execution containers run as non-root, with no network, read-only root filesystem, resource limits, and temporary per-run filesystems.
 
-## 5. Configure the existing Render web service
+### 5. Configure the existing Render web service
 
-Add these environment variables to the existing `PolyCompile` Render Web Service:
+Add these environment variables to the existing PolyCompile Render Web Service:
 
 - `INTERACTIVE_GATEWAY_URL` = `wss://YOUR-GATEWAY-DOMAIN/session`
 - `INTERACTIVE_TICKET_SECRET` = the exact same secret used by the gateway
 
-Save the changes and let Render redeploy.
+Save and redeploy the existing web service. Do not set the gateway URL to the Render app's own `/session` route; the gateway is a separate Docker-backed service.
 
-## 6. Test
+### 6. Verify the deployed terminal
 
-Open the deployed PolyCompile site and run:
+Run these examples in the website:
 
-### Python
+**Python**
 
 ```python
 name = input("Enter your name: ")
 print("Hello", name)
 ```
 
-When `Enter your name:` appears, type `Surya` in the input line at the bottom of the Output console and press Enter. Expected output:
+**C**
 
-```text
-Enter your name: Hello Surya
+```c
+#include <stdio.h>
+int main(void) {
+    int a, b;
+    printf("Enter two numbers: ");
+    if (scanf("%d %d", &a, &b) != 2) return 1;
+    printf("Sum = %d\\n", a + b);
+    return 0;
+}
 ```
 
-Repeat with C (`scanf`), C++ (`cin`), and Java (`Scanner`).
+**C++**
+
+```cpp
+#include <iostream>
+#include <string>
+int main() {
+    std::string name;
+    std::cout << "Enter full name: ";
+    std::getline(std::cin, name);
+    std::cout << "Hello " << name << '\\n';
+}
+```
+
+**Java**
+
+```java
+import java.util.Scanner;
+public class Main {
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        System.out.print("Enter a number: ");
+        int n = sc.nextInt();
+        System.out.println("Square = " + n * n);
+    }
+}
+```
+
+The `npm run verify:interactive` check validates all 47 configured runtime entries, source filenames, compile/run command shapes, the PTY dependency, runtime-image files, and non-root writable tmpfs settings; it also prints any compiler catalog IDs that lack live runtime definitions. The main test suite and 54-snippet verification remain separate checks. End-to-end execution of every language must be tested on the deployed Docker gateway because the Render web process does not contain the language toolchains or Docker daemon.
 
 ## Operational notes
 
-- The gateway uses a short-lived ticket with a 60-second lifetime; the ticket is one-purpose and signed, but currently not bound to a user identity because the project has no authenticated-user session model in this flow. Add application authentication/rate limits before opening this to a public audience.
-- The current runner image has broad language runtimes and can be large. Build it once and keep it on the Docker host.
-- This patch is a first deployable implementation, not a completed third-party security audit. Before public production use, add per-user quotas, queueing, log redaction, filesystem quotas, stronger syscall policy, and monitoring.
-- The old `/api/execute` batch endpoint remains in place for compatibility. The new Run & Compile UI uses the interactive gateway and will report a configuration error until steps 1–5 are complete.
+- The `/api/execute` cloud batch endpoint remains available as a fallback. If the interactive gateway is not configured, programs that do not read stdin run automatically through batch execution; programs detected as stdin-driven show an inline input area and submit that input with the batch request. This fallback is not live prompt-by-prompt input. The Run & Compile UI automatically switches back to true interactive WebSocket execution when the signed gateway is configured.
+- The ticket currently is not bound to a user identity because the project does not have an authenticated-user session model for this feature. Add application authentication, per-user quotas, queueing, monitoring, and a security review before opening this service to a large public audience.

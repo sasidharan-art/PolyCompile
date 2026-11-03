@@ -99,7 +99,7 @@ body.theme-light {
   --text-secondary: #3c4266;
   --text-muted:     #5c6280;
   --text-dim:       #8890a8;
-  --console-bg:     #1a1c2e;
+  --console-bg:     #f7f8fa;
   --shadow-glow: 0 0 16px rgba(99,102,241,.2);
 }
 
@@ -917,28 +917,7 @@ body.theme-light .detection-pill { background: rgba(238,240,248,0.9); }
 }
 .btn-dismiss:hover { opacity: 1; }
 
-/* Programiz-style stdin and output panels */
-.stdin-panel {
-  flex: 0 0 auto;
-  padding: 10px 14px 12px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-subtle);
-  border-top: 0;
-}
-.stdin-panel-heading, .output-panel-heading {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; color: var(--text-secondary); font-size: 0.76rem; font-weight: 700;
-  margin-bottom: 7px;
-}
-.stdin-panel-heading span { color: var(--text-muted); font-size: 0.68rem; font-weight: 400; }
-.stdin-input {
-  display: block; width: 100%; min-height: 62px; max-height: 120px; resize: vertical;
-  box-sizing: border-box; padding: 9px 11px; border-radius: 6px;
-  border: 1px solid var(--border-default); outline: none;
-  background: var(--console-bg); color: var(--text-primary);
-  font: 0.82rem/1.55 var(--font-mono); white-space: pre; tab-size: 4;
-}
-.stdin-input:focus { border-color: var(--color-primary, #6366f1); }
+/* Single integrated interactive terminal (stdout + stdin transcript) */
 .output-panel-heading { justify-content: flex-start; margin: 0; padding: 9px 14px; background: var(--bg-secondary); border: 1px solid var(--border-subtle); border-top: 0; }
 /* CONSOLE OUTPUT */
 .console-output {
@@ -1636,8 +1615,8 @@ body.theme-light .detection-pill { background: rgba(238,240,248,0.9); }
 ========================================================= */
 .console-output.terminal-window {
   flex: 1;
-  background: #0d1117 !important;
-  color: #e6edf3 !important;
+  background: var(--console-bg) !important;
+  color: var(--text-primary) !important;
   font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace !important;
   font-size: 0.95rem;
   line-height: 1.6;
@@ -1731,3 +1710,17 @@ body.theme-light .detection-pill { background: rgba(238,240,248,0.9); }
   color: #f85149;
   white-space: pre-wrap;
 }
+
+
+/* Live terminal input row */
+.interactive-terminal-text { display:block; margin:0; min-height:1.5em; white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; color:inherit; }
+.interactive-terminal-input-row { display:flex; align-items:center; gap:9px; width:100%; margin-top:2px; font:inherit; }
+.terminal-prompt { color:#58a6ff; font-weight:700; flex:0 0 auto; }
+.interactive-terminal-input { flex:1; min-width:0; padding:5px 0; border:0; outline:0; background:transparent; color:#2563eb; caret-color:#2563eb; font:inherit; }
+.interactive-terminal-input::placeholder { color:#7d8590; opacity:.85; }
+.terminal-send-button { flex:0 0 auto; border:1px solid #30363d; border-radius:5px; padding:4px 10px; background:#21262d; color:#e6edf3; cursor:pointer; font:inherit; font-size:.78em; }
+.terminal-send-button:hover { background:#30363d; }
+.terminal-send-button:disabled,.interactive-terminal-input:disabled { opacity:.45; cursor:not-allowed; }
+.terminal-input-echo { color:#2563eb; }
+.terminal-system { color:#8b949e; }
+.stderr-chunk { color:#ff7b72; }

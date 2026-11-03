@@ -36,7 +36,7 @@ wss.on('connection', (ws) => {
     if (!initialized) {
       if (msg.type !== 'start' || typeof msg.sourceCode !== 'string' || msg.sourceCode.length > MAX_SOURCE || typeof msg.languageId !== 'string') { ws.send(JSON.stringify({type:'error',message:'Invalid start request or source exceeds 256 KB.'})); return ws.close(1008); }
       initialized = true; active++;
-      const args = ['run','--rm','--name',containerName,'-i','--network','none','--memory','256m','--cpus','0.50','--pids-limit','64','--read-only','--tmpfs','/work:rw,nosuid,nodev,size=16m','--tmpfs','/tmp:rw,nosuid,nodev,size=32m','--tmpfs','/exec:rw,nosuid,nodev,size=64m','--cap-drop','ALL','--security-opt','no-new-privileges','--user','10001:10001','--entrypoint','node',IMAGE,'/opt/session-runner.js'];
+      const args = ['run','--rm','--name',containerName,'-i','--network','none','--memory','256m','--cpus','0.50','--pids-limit','64','--read-only','--tmpfs','/work:rw,nosuid,nodev,size=16m,uid=10001,gid=10001,mode=0700','--tmpfs','/tmp:rw,nosuid,nodev,size=32m','--tmpfs','/exec:rw,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700','--cap-drop','ALL','--security-opt','no-new-privileges','--user','10001:10001','--entrypoint','node',IMAGE,'/opt/session-runner.js'];
       docker = spawn('docker', args, { stdio:['pipe','pipe','pipe'] });
       docker.stdout.setEncoding('utf8');
       docker.stdout.on('data', chunk => { outputBuffer += chunk; let idx; while ((idx=outputBuffer.indexOf('\n')) >= 0) { const line=outputBuffer.slice(0,idx); outputBuffer=outputBuffer.slice(idx+1); try { const event=JSON.parse(line); if (event.data) { const decoded=Buffer.from(event.data,'base64'); outputBytes += decoded.length; if (outputBytes > 1000000) { if (ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({type:'stderr',data:'\n[Output limit reached: 1 MB]'})); cleanup(); return; } event.data=decoded.toString('utf8'); } if (ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify(event)); } catch {} } });
@@ -46,8 +46,8 @@ wss.on('connection', (ws) => {
       docker.stdin.write(JSON.stringify({language:msg.languageId,source:Buffer.from(msg.sourceCode).toString('base64'),timeoutMs:msg.timeoutMs||15000})+'\n');
       return;
     }
-    if (msg.type === 'input' && typeof msg.data === 'string' && docker?.stdin.writable) docker.stdin.write(msg.data + (msg.newline === false ? '' : '\n'));
-    if (msg.type === 'eof' && docker?.stdin.writable) docker.stdin.end();
+    if (msg.type === 'input' && typeof msg.data === 'string' && Buffer.byteLength(msg.data, 'utf8') <= 65536 && docker?.stdin.writable) docker.stdin.write(msg.data + (msg.newline === false ? '' : '\n'));
+    if (msg.type === 'eof' && docker?.stdin.writable) docker.stdin.write('\u0004');
     if (msg.type === 'stop') cleanup();
   });
   ws.on('close', cleanup); ws.on('error', cleanup);

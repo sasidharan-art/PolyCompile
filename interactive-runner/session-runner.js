@@ -14,8 +14,15 @@ async function start(config) {
   const file = lang.sourceFile || 'main.txt';
   fs.writeFileSync('/work/' + file, source, { mode: 0o600 });
   const env = { PATH: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', HOME: '/tmp', TMPDIR: '/tmp', LANG: 'C.UTF-8' };
+  const shellQuote = value => "'" + String(value).replace(/'/g, "'\\''") + "'";
   const run = (argv, done) => {
-    child = spawn(argv[0], argv.slice(1), { cwd: '/work', env, stdio: ['pipe','pipe','pipe'], detached: true });
+    // Run the language process under a PTY so prompts without a newline are
+    // flushed immediately. Disable PTY echo because the browser echoes input.
+    const command = argv.map(shellQuote).join(' ');
+    child = spawn('script', ['-qefc', `stty -echo; exec ${command}`, '/dev/null'], {
+      cwd: '/work', env: { ...env, TERM: 'xterm-256color' },
+      stdio: ['pipe', 'pipe', 'pipe'], detached: true
+    });
     child.stdout.on('data', b => send('stdout', { data: b.toString('base64') }));
     child.stderr.on('data', b => send('stderr', { data: b.toString('base64') }));
     child.on('error', e => { send('stderr', { data: Buffer.from(e.message).toString('base64') }); done(127); });
