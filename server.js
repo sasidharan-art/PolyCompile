@@ -33,12 +33,10 @@ const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
 
-// Development-only in-process runner. It is deliberately disabled by default because
-// arbitrary source execution inside the web server is not an isolation boundary.
-const wss = new WebSocketServer({ server, path: '/session', maxPayload: 300000 });
-wss.on('connection', ws => {
-  // Same-origin fallback for single-service demo deployments. This runs child
-  // processes on the web host and is NOT a security boundary for public production.
+// Setup interactive WebSocket server for real-time streaming stdin/stdout
+const wss = new WebSocketServer({ server, path: '/session' });
+wss.on('connection', (ws) => {
+  // InteractiveSession is a class; instantiate it for each WebSocket connection.
   new InteractiveSession(ws);
 });
 
@@ -60,11 +58,22 @@ app.get(['/health', '/api/health'], (req, res) => {
 
 // Interactive terminal ticket endpoint (supports both remote gateway and built-in WebSocket)
 app.post('/api/interactive-ticket', (req, res) => {
-  // Single-service same-origin WebSocket mode for the current demo deployment.
-  // No external gateway URL or ticket secret is required in this mode.
-  // WARNING: InteractiveSession runs child processes on this host. Use only
-  // for a controlled demo; use the isolated Docker gateway for public production.
-  return res.json({ success: true, ticket: 'local-session', gatewayUrl: '/session', mode: 'builtin-demo' });
+  const secret = process.env.INTERACTIVE_TICKET_SECRET;
+  const gatewayUrl = process.env.INTERACTIVE_GATEWAY_URL;
+
+  if (secret && gatewayUrl) {
+    const payload = Buffer.from(JSON.stringify({ scope: 'interactive-run', exp: Date.now() + 60_000, nonce: crypto.randomBytes(16).toString('hex') })).toString('base64url');
+    const signature = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+    return res.json({ success: true, ticket: `${payload}.${signature}`, gatewayUrl });
+  }
+
+  // Built-in local WebSocket support
+  res.json({
+    success: true,
+    ticket: 'local-session',
+    gatewayUrl: '/session',
+    mode: 'builtin'
+  });
 });
 
 // 1. Language Catalog & Taxonomy

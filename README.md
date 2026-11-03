@@ -30,8 +30,6 @@ The default Judge0 CE and Wandbox community endpoints are useful for development
 | `JUDGE0_RAPIDAPI_HOST` | Optional RapidAPI host header when using a RapidAPI endpoint |
 | `PISTON_URL` | Optional trusted Piston-compatible execution endpoint |
 | `PISTON_KEY` | Optional Piston provider authorization token |
-| `INTERACTIVE_GATEWAY_URL` | Secure WebSocket URL for the isolated interactive execution gateway, e.g. `wss://host/session` |
-| `INTERACTIVE_TICKET_SECRET` | Shared HMAC secret used by the web service and interactive gateway |
 
 Copy `.env.example` to `.env` for local development. Do not commit `.env`.
 
@@ -44,7 +42,7 @@ npm ci
 npm start
 ```
 
-Open `http://localhost:3000`. The live stdin terminal requires the separate Docker-based gateway described in [INTERACTIVE_TERMINAL_DEPLOYMENT.md](INTERACTIVE_TERMINAL_DEPLOYMENT.md). It intentionally fails closed when that gateway is not configured.
+Open `http://localhost:3000`.
 
 Local-only interpreter/simulator paths can be explicitly selected during development with `preferLocal: true`. They are not a secure boundary for arbitrary untrusted code and are disabled in production. Brainfuck has a bounded built-in VM. In production, remote provider failures are returned as execution-service errors; PolyCompile does not silently replace a failed real compiler with simulated output.
 
@@ -68,8 +66,7 @@ PolyCompile/
 ├── src/compiler/           # Language detection and compiler analysis phases
 ├── src/execution/          # Execution routing and provider clients
 ├── src/snippets/           # Curated language examples
-├── runner/                 # Docker execution image and language registry
-├── interactive-runner/     # WebSocket gateway and persistent-process session runner
+├── runner/                 # Standalone Docker runner assets and language registry
 ├── api/                    # Optional Vercel API entry point
 ├── server.js               # Express app and REST API
 ├── package.json
@@ -91,8 +88,6 @@ PolyCompile/
 | `/api/detect` | POST | Automatic language detection |
 | `/api/compile-phases` | POST | Lexical, syntax, semantic, IR, and optimization analysis |
 | `/api/execute` | POST | Compiler analysis plus remote sandbox execution |
-| `/api/interactive-ticket` | POST | Issues a short-lived ticket for the interactive WebSocket gateway |
-| `/session` | WebSocket | Development-only in-process interactive runner; disabled unless explicitly opted in |
 
 Example execution request:
 
@@ -110,9 +105,3 @@ Example execution request:
 - Vercel configuration is retained as an optional alternative for the web/API tier, but Vercel is not the recommended host for this long-running compiler workflow.
 - The root `Dockerfile` packages the Node.js web application; it does not install all language compilers.
 - Do not expose provider credentials or sandbox runner endpoints in frontend code.
-
-### Quick single-service interactive terminal demo
-
-The current package includes a same-origin WebSocket fallback at `/session`; it does not require a separately deployed gateway for a controlled demo. Keep Render's `npm ci` / `npm start` commands and do not configure `INTERACTIVE_GATEWAY_URL` or `INTERACTIVE_TICKET_SECRET` in this mode. See `INTERACTIVE_TERMINAL_DEPLOYMENT.md`.
-
-**Security:** this fallback executes child processes on the web-service host and is not a production sandbox. Use only for a controlled hackathon demonstration; public production deployments must use the isolated Docker gateway.

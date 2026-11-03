@@ -294,7 +294,18 @@
             </div>
           </div>
 
-          <!-- CONSOLE OUTPUT (PROGRAMIZ STYLE TERMINAL) -->
+          <!-- Programiz-style standard input panel: enter values before running. -->
+          <section class="stdin-panel" aria-label="Program input">
+            <div class="stdin-panel-heading">
+              <label for="stdinInput"><i class="fa-solid fa-keyboard"></i> Input (stdin)</label>
+              <span>One value per line · Paste multiple lines if needed</span>
+            </div>
+            <textarea id="stdinInput" class="stdin-input" rows="3" spellcheck="false"
+              placeholder="Enter program input here...&#10;Example:&#10;5&#10;10"></textarea>
+          </section>
+
+          <!-- Output is rendered separately, preserving stdout line order. -->
+          <div class="output-panel-heading"><i class="fa-solid fa-terminal"></i> Output</div>
           <div class="console-output terminal-window" id="consoleOutput">
             <div class="console-placeholder">
               <div class="placeholder-icon"><i class="fa-solid fa-terminal"></i></div>

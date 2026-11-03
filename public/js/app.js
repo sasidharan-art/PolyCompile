@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const clearConsoleBtn     = document.getElementById('clearConsoleBtn');
   const copyOutputBtn       = document.getElementById('copyOutputBtn');
   const consoleOutput       = document.getElementById('consoleOutput');
+  const stdinInput          = document.getElementById('stdinInput');
   const toastContainer      = document.getElementById('toastContainer');
 
   const detectedLangName    = document.getElementById('detectedLangName');
@@ -284,234 +285,191 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* =========================================================
-     UNIVERSAL INTERACTIVE TERMINAL (persistent stdin/stdout)
+     UNIVERSAL ALL-LANGUAGE TERMINAL RUNNER
   ========================================================= */
   let terminalScreen = null;
-  let terminalText = null;
-  let terminalInput = null;
-  let interactiveSocket = null;
+  let activeInput = null;
+  let inputLines = [];
   let currentCode = '';
   let currentLang = '';
-  let executionFinished = false;
 
   function resetTerminal() {
     consoleOutput.innerHTML = '';
     terminalScreen = document.createElement('div');
-    terminalScreen.className = 'interactive-terminal';
-    terminalScreen.style.cssText = 'font-family:Consolas,"Courier New",monospace; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.6; font-size:14px; color:#c9d1d9;';
-    terminalText = document.createElement('pre');
-    terminalText.style.cssText = 'margin:0; white-space:pre-wrap; font:inherit;';
-    terminalScreen.appendChild(terminalText);
+    terminalScreen.style.cssText = 'font-family: Consolas, "Courier New", monospace; white-space: pre-wrap; line-height: 1.6; font-size: 14px; color: #c9d1d9;';
     consoleOutput.appendChild(terminalScreen);
   }
 
-  function terminalWrite(value, className = 'stdout-chunk') {
-    if (!terminalText) resetTerminal();
-    const span = document.createElement('span');
-    span.className = className;
-    span.textContent = String(value ?? '');
-    terminalText.appendChild(span);
-    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+  function detectLanguageUniversal(code) {
+    const sel = languageSelect.value;
+    if (sel && sel !== 'auto') return sel;
+
+    // Multi-Language heuristic
+    if (/#include\s*<iostream>|cout\s*<<|cin\s*>>|namespace\s+std/.test(code)) return 'cpp';
+    if (/#include\s*<stdio\.h>|printf\s*\(|scanf\s*\(/.test(code)) return 'c';
+    if (/^\s*program\s+\w+|implicit\s+none|end\s+program|print\s*\*\s*,/im.test(code)) return 'fortran';
+    if (/^\s*program\s+\w+\s*;|\breadln\s*\(/im.test(code)) return 'pascal';
+    if (/public\s+class\s+\w+|System\.out\.println|Scanner\s+/.test(code)) return 'java';
+    if (/def\s+\w+\(.*\):|print\s*\(|import\s+sys|input\s*\(/.test(code)) return 'python';
+    if (/fn\s+main\(\)|println!\(/.test(code)) return 'rust';
+    if (/package\s+main|import\s+"fmt"|fmt\.Print/.test(code)) return 'go';
+    if (/using\s+System;|Console\.WriteLine/.test(code)) return 'csharp';
+    if (/console\.log\(|const\s+\w+\s*=|function\s+\w+\(/.test(code)) return 'javascript';
+    if (/puts\s+|require_relative/.test(code)) return 'ruby';
+    if (/<\?php/.test(code)) return 'php';
+
+    return currentDetection?.detected?.id || 'python';
   }
 
-  function closeInteractiveSocket(sendStop = false) {
-    const socket = interactiveSocket;
-    interactiveSocket = null;
-    if (socket && socket.readyState < WebSocket.CLOSING) {
-      if (sendStop && socket.readyState === WebSocket.OPEN) {
-        try { socket.send(JSON.stringify({ type: 'stop' })); } catch {}
-      }
-      try { socket.close(); } catch {}
-    }
-  }
-
-  function ensureTerminalInput() {
-    if (terminalInput && terminalInput.isConnected) return terminalInput;
-    const row = document.createElement('form');
-    row.className = 'interactive-terminal-input-row';
-    row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-top:8px;';
-    const prompt = document.createElement('span');
-    prompt.textContent = '›';
-    prompt.style.cssText = 'color:#58a6ff;font-weight:700;';
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.autocomplete = 'off';
-    input.spellcheck = false;
-    input.setAttribute('aria-label', 'Program standard input');
-    input.placeholder = 'Type input and press Enter';
-    input.style.cssText = 'flex:1;min-width:0;background:transparent;border:0;border-bottom:1px solid var(--border-color, #30363d);outline:none;color:#58a6ff;font:inherit;padding:4px 2px;';
-    const send = document.createElement('button');
-    send.type = 'submit';
-    send.textContent = 'Send';
-    send.className = 'btn btn-secondary';
-    row.append(prompt, input, send);
-    terminalScreen.appendChild(row);
-    terminalInput = input;
-
-    const submitLine = value => {
-      if (!interactiveSocket || interactiveSocket.readyState !== WebSocket.OPEN) return;
-      terminalWrite(value + '\n', 'terminal-input-echo');
-      interactiveSocket.send(JSON.stringify({ type: 'input', data: value, newline: true }));
-      input.value = '';
-      input.focus();
-    };
-    row.addEventListener('submit', event => {
-      event.preventDefault();
-      submitLine(input.value);
-    });
-    input.addEventListener('paste', event => {
-      const pasted = (event.clipboardData || window.clipboardData)?.getData('text') || '';
-      if (!pasted.includes('\n') && !pasted.includes('\r')) return;
-      event.preventDefault();
-      const lines = pasted.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-      if (lines[lines.length - 1] === '') lines.pop();
-      if (input.value) lines[0] = input.value + lines[0];
-      for (const line of lines) submitLine(line);
-    });
-    consoleOutput.addEventListener('click', () => {
-      if (terminalInput?.isConnected && !terminalInput.disabled) terminalInput.focus();
-    });
-    input.focus();
-    return input;
-  }
-
-  function finishInteractiveExecution(code, durationMs) {
-    if (executionFinished) return;
-    executionFinished = true;
-    statExitCode.textContent = String(code);
-    statExitCode.style.color = code === 0 ? 'var(--color-success)' : 'var(--color-error)';
-    statEngine.textContent = 'PolyCompile Interactive Sandbox';
-    if (durationMs != null) statExecTime.textContent = `${durationMs} ms`;
-    terminalWrite(`\n[Process exited with code ${code}]\n`, 'terminal-system');
-    if (code === 0) showToast('Program completed successfully.', 'success');
-    else showToast(`Program exited with code ${code}.`, 'error');
-    if (terminalInput) terminalInput.disabled = true;
-    setLoadingState(false);
-    clearTimeoutBar();
-    closeInteractiveSocket(false);
+  function requiresStdin(code) {
+    return /(?:input\s*\(|scanf\s*\(|cin\s*>>|readLine|Scanner|gets\s*\(|fgets\s*\(|io\.read|std::io|Console\.ReadLine)/i.test(code);
   }
 
   async function runCode() {
     if (isRunning) {
-      closeInteractiveSocket(true);
       if (currentAbortCtrl) currentAbortCtrl.abort();
       setLoadingState(false);
       clearTimeoutBar();
-      terminalWrite('\n[Execution stopped by user]\n', 'terminal-system');
       showToast('Execution stopped.', 'info');
       return;
     }
 
     const sourceCode = codeEditor.value;
-    if (!sourceCode.trim()) return showToast('Please enter source code first.', 'warning');
+    if (!sourceCode.trim()) {
+      showToast('Please enter source code first.', 'warning');
+      return;
+    }
+
     if (window.innerWidth <= 900) setResponsiveView('output');
     switchTab('consoleTab');
     resetTerminal();
+
     currentCode = sourceCode;
-    executionFinished = false;
-    terminalInput = null;
-    setLoadingState(true, 'Starting…');
+    currentLang = detectLanguageUniversal(sourceCode);
+    // Programiz-style workflow: provide stdin in the Input panel, then run once.
+    // This sends all input lines to the selected language runtime in their original order.
+    const stdinData = stdinInput ? stdinInput.value : '';
+    executeCode(stdinData);
+  }
+
+  function spawnTerminalRow() {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; align-items:center; margin:0; padding:0;';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    // Entirely transparent, zero border/underline, native cursor
+    input.style.cssText = 'background:transparent; border:none; outline:none; color:#58a6ff; font-family:inherit; font-size:inherit; padding:0; margin:0; width:100%; caret-color:#58a6ff;';
+
+    row.appendChild(input);
+    terminalScreen.appendChild(row);
+
+    activeInput = input;
+    input.focus();
+    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+
+    // Paste handling: Paste single or 100+ lines at once
+    input.addEventListener('paste', (e) => {
+      const text = (e.clipboardData || window.clipboardData).getData('text');
+      if (text.includes('\n')) {
+        e.preventDefault();
+        const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+        for (const l of lines) {
+          inputLines.push(l);
+          const echo = document.createElement('div');
+          echo.textContent = l;
+          terminalScreen.insertBefore(echo, row);
+        }
+        row.remove();
+        executeCode(inputLines.join('\n') + '\n');
+      }
+    });
+
+    input.addEventListener('keydown', (e) => {
+      // Ctrl+Enter or Shift+Enter: Execute with current buffer immediately
+      if (e.key === 'Enter' && (e.ctrlKey || e.shiftKey)) {
+        e.preventDefault();
+        const val = input.value;
+        if (val.trim()) inputLines.push(val);
+        row.remove();
+        executeCode(inputLines.join('\n') + '\n');
+        return;
+      }
+
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const val = input.value;
+
+        // Enter on an empty line signals that input entry is complete
+        if (val.trim() === '') {
+          if (inputLines.length > 0) {
+            row.remove();
+            executeCode(inputLines.join('\n') + '\n');
+            return;
+          }
+        }
+
+        // Echo the entered line and advance to the next line
+        inputLines.push(val);
+        const echo = document.createElement('div');
+        echo.textContent = val;
+        terminalScreen.insertBefore(echo, row);
+
+        input.value = '';
+        consoleOutput.scrollTop = consoleOutput.scrollHeight;
+      }
+    });
+
+    consoleOutput.addEventListener('click', () => {
+      if (activeInput && activeInput.isConnected) activeInput.focus();
+    });
+  }
+
+  async function executeCode(stdinData) {
+    const loadingText = document.createElement('div');
+    loadingText.style.cssText = 'color:#58a6ff; margin-top:6px;';
+    loadingText.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running…';
+    terminalScreen.appendChild(loadingText);
+    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+
+    setLoadingState(true, 'Running…');
     startTimeoutBar(MAX_RUN_TIMEOUT_MS);
     currentAbortCtrl = new AbortController();
 
     try {
-      let languageId = languageSelect.value;
-      if (!languageId || languageId === 'auto') {
-        const detectedRes = await fetch('/api/detect', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sourceCode }), signal: currentAbortCtrl.signal
-        });
-        const detected = await detectedRes.json();
-        if (!detectedRes.ok) throw new Error(detected.error || 'Automatic language detection failed.');
-        languageId = detected.detected?.id || detected.language?.id || detected.id;
-      }
-      if (!languageId) throw new Error('Could not determine the language. Select it manually and try again.');
-      currentLang = languageId;
-
-      const ticketRes = await fetch('/api/interactive-ticket', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: '{}', signal: currentAbortCtrl.signal
+      const response = await fetch('/api/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceCode: currentCode,
+          languageId: currentLang,
+          stdin: stdinData,
+          preferLocal: Boolean(preferLocalCheck && preferLocalCheck.checked)
+        }),
+        signal: currentAbortCtrl.signal
       });
-      const ticketData = await ticketRes.json();
-      if (!ticketRes.ok || !ticketData.success || !ticketData.gatewayUrl) {
-        throw new Error(ticketData.error || 'Interactive execution service is not configured.');
+
+      const data = await response.json();
+      loadingText.remove();
+
+      if (!response.ok || !data.success) {
+        handleExecutionError(data);
+      } else {
+        renderExecutionResults(data);
       }
-
-      const wsUrl = new URL(ticketData.gatewayUrl, window.location.href);
-      wsUrl.searchParams.set('ticket', ticketData.ticket || '');
-      if (wsUrl.protocol === 'https:') wsUrl.protocol = 'wss:';
-      else if (wsUrl.protocol === 'http:') wsUrl.protocol = 'ws:';
-      const socket = new WebSocket(wsUrl.toString());
-      interactiveSocket = socket;
-
-      socket.onopen = () => {
-        if (interactiveSocket !== socket) return;
-        socket.send(JSON.stringify({ type: 'start', sourceCode, languageId, timeoutMs: MAX_RUN_TIMEOUT_MS }));
-      };
-      socket.onmessage = event => {
-        if (interactiveSocket !== socket) return;
-        let message;
-        try { message = JSON.parse(event.data); } catch { return; }
-        if (message.type === 'ready') {
-          terminalWrite(`[${message.language || languageId}] Program started. Enter input below when prompted.\n`, 'terminal-system');
-          setLoadingState(true, 'Running…');
-          ensureTerminalInput();
-        } else if (message.type === 'stdout') {
-          terminalWrite(message.data || '', 'stdout-chunk');
-        } else if (message.type === 'stderr') {
-          terminalWrite(message.data || '', 'stderr-chunk');
-        } else if (message.type === 'error') {
-          terminalWrite(`\n${message.message || 'Interactive execution failed.'}\n`, 'stderr-chunk');
-          if (!executionFinished) {
-            setLoadingState(false);
-            clearTimeoutBar();
-            if (terminalInput) terminalInput.disabled = true;
-          }
-        } else if (message.type === 'exit') {
-          finishInteractiveExecution(Number.isInteger(message.code) ? message.code : 1, message.durationMs);
-        } else if (message.type === 'closed' && !executionFinished && isRunning) {
-          terminalWrite('\n[Interactive execution connection closed]\n', 'terminal-system');
-          setLoadingState(false);
-          clearTimeoutBar();
-        }
-      };
-      socket.onerror = () => {
-        if (interactiveSocket !== socket || executionFinished) return;
-        terminalWrite('\nInteractive connection failed. Verify the interactive gateway URL and deployment configuration.\n', 'stderr-chunk');
-        setLoadingState(false);
-        clearTimeoutBar();
-      };
-      socket.onclose = () => {
-        if (interactiveSocket === socket) interactiveSocket = null;
-        if (!executionFinished && isRunning) {
-          setLoadingState(false);
-          clearTimeoutBar();
-        }
-      };
     } catch (err) {
-      if (err.name !== 'AbortError') {
-        terminalWrite(`${err.message || 'Unable to start interactive execution.'}\n`, 'stderr-chunk');
-        showToast('Interactive execution could not be started.', 'error');
-      }
-      setLoadingState(false);
-      clearTimeoutBar();
+      loadingText.remove();
+      handleExecutionError({
+        success: false,
+        error: err.message || 'Execution error',
+        userMessage: 'Could not connect to compiler sandbox.'
+      });
     } finally {
-      currentAbortCtrl = null;
-    }
-  }
-
-  const abortRunBtn = document.getElementById('abortRunBtn');
-  if (abortRunBtn) {
-    abortRunBtn.addEventListener('click', () => {
-      if (!isRunning) return;
-      closeInteractiveSocket(true);
-      if (currentAbortCtrl) currentAbortCtrl.abort();
-      if (terminalInput) terminalInput.disabled = true;
-      terminalWrite('\n[Execution cancelled by user]\n', 'terminal-system');
       setLoadingState(false);
       clearTimeoutBar();
-      showToast('Execution cancelled.', 'info');
-    });
+    }
   }
 
   function handleExecutionError(data) {
@@ -542,7 +500,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const stdout = exec.stdout || data.output || '';
     const stderr = exec.stderr || data.errorOutput || '';
 
-    // Clean Programiz-style output presentation
+    // Keep the output pane focused on actual program output; submitted stdin is
+    // shown as a separate, clearly-labelled block above it (Programiz-style).
     terminalScreen.innerHTML = '';
 
     if (stdout) {
@@ -612,10 +571,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function setLoadingState(loading, label = 'Compiling…') {
     isRunning = loading;
     if (loading) {
-      // Keep the control clickable so the same button can stop a running session.
-      runBtn.disabled = false;
-      runBtnIcon.className = 'fa-solid fa-stop';
-      runBtnText.textContent = label === 'Analyzing…' ? label : 'Stop';
+      runBtn.disabled = true;
+      runBtnIcon.className = 'fa-solid fa-spinner fa-spin';
+      runBtnText.textContent = label;
     } else {
       runBtn.disabled = false;
       runBtnIcon.className = 'fa-solid fa-play';
