@@ -77,9 +77,13 @@ When `Enter your name:` appears, type `Surya` in the input line at the bottom of
 Enter your name: Hello Surya
 ```
 
-Repeat with C (`scanf`), C++ (`cin`), and Java (`Scanner`).
+Repeat with C (`scanf`), C++ (`cin`), and Java (`Scanner`). The execution image reads its supported interactive runtime commands from `runner/languages.json`; the interactive gateway can execute only language IDs present in that file. The language catalogue in the UI is broader than this runtime list, so verify a language is present in the runner registry before promising live stdin support for it.
 
 ## Operational notes
+
+- The Run & Compile button starts the program once. The terminal keeps that process alive and forwards each submitted line to its standard input; it does not rerun the source after every input.
+- `runner/Dockerfile` installs the runtime image and copies `runner/languages.json` to `/opt/languages.json`, which is read by `/opt/session-runner.js` inside each session container.
+- The old in-process WebSocket runner is disabled by default. `ALLOW_UNSANDBOXED_INTERACTIVE=true` is a development-only opt-in and must not be set on a public production service.
 
 - The gateway uses a short-lived ticket with a 60-second lifetime; the ticket is one-purpose and signed, but currently not bound to a user identity because the project has no authenticated-user session model in this flow. Add application authentication/rate limits before opening this to a public audience.
 - The current runner image has broad language runtimes and can be large. Build it once and keep it on the Docker host.

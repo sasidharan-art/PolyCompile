@@ -33,9 +33,14 @@ const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
 
-// Setup interactive WebSocket server for real-time streaming stdin/stdout
+// Development-only in-process runner. It is deliberately disabled by default because
+// arbitrary source execution inside the web server is not an isolation boundary.
 const wss = new WebSocketServer({ server, path: '/session' });
-wss.on('connection', (ws, req) => {
+wss.on('connection', ws => {
+  if (process.env.ALLOW_UNSANDBOXED_INTERACTIVE !== 'true') {
+    ws.send(JSON.stringify({ type: 'error', message: 'Interactive execution is not configured. Deploy the isolated interactive gateway and set INTERACTIVE_GATEWAY_URL plus INTERACTIVE_TICKET_SECRET.' }));
+    return ws.close(1011, 'Interactive gateway required');
+  }
   handleInteractiveSession(ws);
 });
 
@@ -66,12 +71,13 @@ app.post('/api/interactive-ticket', (req, res) => {
     return res.json({ success: true, ticket: `${payload}.${signature}`, gatewayUrl });
   }
 
-  // Built-in local WebSocket support
-  res.json({
-    success: true,
-    ticket: 'local-session',
-    gatewayUrl: '/session',
-    mode: 'builtin'
+  // Never silently fall back to executing untrusted source inside the web process.
+  if (process.env.NODE_ENV !== 'production' && process.env.ALLOW_UNSANDBOXED_INTERACTIVE === 'true') {
+    return res.json({ success: true, ticket: 'local-session', gatewayUrl: '/session', mode: 'development-only' });
+  }
+  return res.status(503).json({
+    success: false,
+    error: 'Interactive execution gateway is not configured. Set INTERACTIVE_GATEWAY_URL and INTERACTIVE_TICKET_SECRET.'
   });
 });
 

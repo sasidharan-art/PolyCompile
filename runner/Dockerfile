@@ -31,14 +31,16 @@ RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin runner \
 COPY runner/runner.js /opt/polycompile/runner.js
 COPY runner/brainfuck.js /opt/polycompile/brainfuck.js
 COPY runner/languages.json /opt/polycompile/languages.json
+COPY runner/languages.json /opt/languages.json
+COPY interactive-runner/session-runner.js /opt/session-runner.js
 
 RUN chown -R root:root /opt/polycompile \
-    && chmod -R 0555 /opt/polycompile
+    && chmod -R 0555 /opt/polycompile \
+    && chmod 0444 /opt/languages.json \
+    && chmod 0444 /opt/session-runner.js
 
 USER 10001:10001
 WORKDIR /work
 ENTRYPOINT ["node", "/opt/polycompile/runner.js"]
 
-# Interactive sessions use the same pinned language runtime image, but each
-# session is launched as a fresh, isolated container by interactive-runner/gateway.js.
-COPY interactive-runner/session-runner.js /opt/session-runner.js
+# Interactive sessions use this image with the session entrypoint overridden by the gateway.
