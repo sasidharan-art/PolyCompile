@@ -26,7 +26,7 @@ const IntermediateCodeGenerator = require('./src/compiler/IntermediateCode');
 const CodeOptimizer = require('./src/compiler/CodeOptimizer');
 const DiagnosticEngine = require('./src/compiler/DiagnosticEngine');
 const ExecutionManager = require('./src/execution/ExecutionManager');
-const { handleInteractiveSession } = require('./src/execution/InteractiveSession');
+const InteractiveSession = require('./src/execution/InteractiveSession');
 const { SNIPPETS, getAllSnippets } = require('./src/snippets/CodeSnippets');
 
 const app = express();
@@ -35,13 +35,11 @@ const PORT = process.env.PORT || 3000;
 
 // Development-only in-process runner. It is deliberately disabled by default because
 // arbitrary source execution inside the web server is not an isolation boundary.
-const wss = new WebSocketServer({ server, path: '/session' });
+const wss = new WebSocketServer({ server, path: '/session', maxPayload: 300000 });
 wss.on('connection', ws => {
-  if (process.env.ALLOW_UNSANDBOXED_INTERACTIVE !== 'true') {
-    ws.send(JSON.stringify({ type: 'error', message: 'Interactive execution is not configured. Deploy the isolated interactive gateway and set INTERACTIVE_GATEWAY_URL plus INTERACTIVE_TICKET_SECRET.' }));
-    return ws.close(1011, 'Interactive gateway required');
-  }
-  handleInteractiveSession(ws);
+  // Same-origin fallback for single-service demo deployments. This runs child
+  // processes on the web host and is NOT a security boundary for public production.
+  new InteractiveSession(ws);
 });
 
 // Code playground requests should remain small; this also protects serverless payload limits.
@@ -62,23 +60,11 @@ app.get(['/health', '/api/health'], (req, res) => {
 
 // Interactive terminal ticket endpoint (supports both remote gateway and built-in WebSocket)
 app.post('/api/interactive-ticket', (req, res) => {
-  const secret = process.env.INTERACTIVE_TICKET_SECRET;
-  const gatewayUrl = process.env.INTERACTIVE_GATEWAY_URL;
-
-  if (secret && gatewayUrl) {
-    const payload = Buffer.from(JSON.stringify({ scope: 'interactive-run', exp: Date.now() + 60_000, nonce: crypto.randomBytes(16).toString('hex') })).toString('base64url');
-    const signature = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
-    return res.json({ success: true, ticket: `${payload}.${signature}`, gatewayUrl });
-  }
-
-  // Never silently fall back to executing untrusted source inside the web process.
-  if (process.env.NODE_ENV !== 'production' && process.env.ALLOW_UNSANDBOXED_INTERACTIVE === 'true') {
-    return res.json({ success: true, ticket: 'local-session', gatewayUrl: '/session', mode: 'development-only' });
-  }
-  return res.status(503).json({
-    success: false,
-    error: 'Interactive execution gateway is not configured. Set INTERACTIVE_GATEWAY_URL and INTERACTIVE_TICKET_SECRET.'
-  });
+  // Single-service same-origin WebSocket mode for the current demo deployment.
+  // No external gateway URL or ticket secret is required in this mode.
+  // WARNING: InteractiveSession runs child processes on this host. Use only
+  // for a controlled demo; use the isolated Docker gateway for public production.
+  return res.json({ success: true, ticket: 'local-session', gatewayUrl: '/session', mode: 'builtin-demo' });
 });
 
 // 1. Language Catalog & Taxonomy

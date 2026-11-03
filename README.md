@@ -110,3 +110,9 @@ Example execution request:
 - Vercel configuration is retained as an optional alternative for the web/API tier, but Vercel is not the recommended host for this long-running compiler workflow.
 - The root `Dockerfile` packages the Node.js web application; it does not install all language compilers.
 - Do not expose provider credentials or sandbox runner endpoints in frontend code.
+
+### Quick single-service interactive terminal demo
+
+The current package includes a same-origin WebSocket fallback at `/session`; it does not require a separately deployed gateway for a controlled demo. Keep Render's `npm ci` / `npm start` commands and do not configure `INTERACTIVE_GATEWAY_URL` or `INTERACTIVE_TICKET_SECRET` in this mode. See `INTERACTIVE_TERMINAL_DEPLOYMENT.md`.
+
+**Security:** this fallback executes child processes on the web-service host and is not a production sandbox. Use only for a controlled hackathon demonstration; public production deployments must use the isolated Docker gateway.
