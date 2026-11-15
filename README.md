@@ -51,20 +51,6 @@ Open `http://localhost:3000`. The interactive gateway runs on port 8080 with str
 
 Deploy the current Express application as a **Render Web Service**. The Express process serves the frontend and REST API from the same origin. Batch execution is delegated to configured remote sandbox providers. Live terminal input uses a separately deployed WebSocket gateway that launches one isolated Docker runtime container per run; submitted programs are not executed as arbitrary child processes inside the production web server.
 
-### Render setup
-
-The repository includes `render.yaml` for a Render Blueprint deployment.
-
-1. Push this project to a GitHub repository.
-2. In Render, select **New → Blueprint** and connect the repository.
-3. Review the service named `polycompile` and create it.
-4. Use a paid Starter instance for a persistent demo experience. A Free instance can spin down when idle and is not recommended for reliable live demonstrations.
-5. In the Render service environment, configure a managed Judge0 endpoint/API key or a trusted Piston-compatible endpoint if your usage requires predictable capacity. Never commit provider keys to Git.
-6. Wait for the deployment to become Live, then test `/health`, `/api/languages`, `/api/snippets`, `/api/detect`, and `/api/execute`.
-7. For live keyboard input, build and deploy the separate interactive runtime/gateway described in `INTERACTIVE_TERMINAL_DEPLOYMENT.md`; Render alone does not provide the Docker PTY service.
-
-The default Judge0 CE and Wandbox community endpoints are useful for development and demonstrations, but they are third-party services. Their availability, rate limits, language versions, and capacity are outside PolyCompile's control. For dependable production usage, use a managed/private execution provider and verify its supported language list.
-
 ### Environment variables
 
 | Variable | Purpose |
@@ -164,7 +150,6 @@ Example execution request:
 }
 ```
 
-## Deployment notes
 
 - Render is the recommended primary host for the existing Express application.
 - Vercel configuration is retained as an optional alternative for the web/API tier, but Vercel is not the recommended host for this long-running compiler workflow.
