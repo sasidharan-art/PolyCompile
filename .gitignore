@@ -1,17 +1,20 @@
 node_modules/
 dist/
+build/
 .env
+.env.*
+!.env.example
 *.log
+*.zip
+*.bak*
+*.backup*
 .DS_Store
+coverage/
 
 # Local runtime and generated artifacts
 runner/test-work/
 runner/language-smoke-results.csv
-*.bak
-*.bak[0-9]
-*.backup
-*.zip
-coverage/
-.DS_Store
-.env.*
-!.env.example
+*.pid
+
+# Timestamped editor backups
+*.backup-*

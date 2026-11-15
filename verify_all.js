@@ -1,5 +1,8 @@
 /**
- * PolyCompile - Complete Language Runner Verification
+ * PolyCompile - Local Engine Regression Suite
+ * Exercises the curated snippets against PolyCompile's local development
+ * engines/simulators. This is NOT native compiler or full-runtime verification;
+ * use the Docker 55-language smoke-test gate for that claim.
  * Tests execution of EVERY SINGLE sample snippet in PolyCompile:
  * - C
  * - Pascal
@@ -33,7 +36,7 @@ const ExecutionManager = require('./src/execution/ExecutionManager');
 const { LANGUAGES } = require('./src/compiler/LanguageRegistry');
 
 async function testAll() {
-  console.log('Testing execution for all ' + SNIPPETS.length + ' snippets...\n');
+  console.log('Testing ' + SNIPPETS.length + ' snippets against local development engines/simulators...\n');
   let passCount = 0;
 
   for (const snip of SNIPPETS) {
@@ -48,7 +51,7 @@ async function testAll() {
 
       const outputPreview = (res.stdout || res.compileOutput || res.stderr || '').trim().split('\n')[0];
       if (res.exitCode === 0 && (res.stdout || res.compileOutput)) {
-        console.log(`[PASS] ${snip.title}`);
+        console.log(`[PASS: LOCAL ENGINE] ${snip.title}`);
         console.log(`       -> Output: "${outputPreview}" | Engine: ${res.engine}`);
         passCount++;
       } else {
@@ -60,7 +63,7 @@ async function testAll() {
     }
   }
 
-  console.log(`\nResult: ${passCount} / ${SNIPPETS.length} passed.`);
+  console.log(`\nLocal engine regression result: ${passCount} / ${SNIPPETS.length} passed.\nThis does not certify native compiler/runtime support.`);
 }
 
 testAll();

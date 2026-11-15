@@ -293,6 +293,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let terminalInput = null;
   let terminalInputRow = null;
   let terminalFinished = false;
+  let terminalCompileErrorShown = false;
+  let terminalProgramOutputSeen = false;
+  let terminalTimeoutShown = false;
   let currentCode = '';
   let currentLang = '';
 
@@ -304,6 +307,9 @@ document.addEventListener('DOMContentLoaded', () => {
     terminalInput = null;
     terminalInputRow = null;
     terminalFinished = false;
+    terminalCompileErrorShown = false;
+    terminalProgramOutputSeen = false;
+    terminalTimeoutShown = false;
     consoleOutput.scrollTop = 0;
   }
 
@@ -323,19 +329,16 @@ document.addEventListener('DOMContentLoaded', () => {
     row.className = 'interactive-terminal-input-row';
     const prompt = document.createElement('span');
     prompt.className = 'terminal-prompt';
-    prompt.textContent = '›';
+    prompt.textContent = '$ ';
     const input = document.createElement('input');
     input.className = 'interactive-terminal-input';
     input.type = 'text';
     input.autocomplete = 'off';
     input.spellcheck = false;
     input.setAttribute('aria-label', 'Program standard input');
-    input.placeholder = 'Type program input and press Enter…';
-    const send = document.createElement('button');
-    send.type = 'submit';
-    send.className = 'terminal-send-button';
-    send.textContent = 'Send';
-    row.append(prompt, input, send);
+    input.placeholder = 'Type input and press Enter…';
+    // Keep a single shell-like prompt line; Enter submits directly.
+    row.append(prompt, input);
     terminalInputRow = row;
     terminalInput = input;
     consoleOutput.appendChild(row);
@@ -359,7 +362,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!pasted.includes('\n') && !pasted.includes('\r')) return;
       event.preventDefault();
       if (!interactiveSocket || interactiveSocket.readyState !== WebSocket.OPEN || terminalFinished) return;
-      const normalized = pasted.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      const prefix = input.value;
+      const normalized = (prefix + pasted).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
       const payload = normalized.endsWith('\n') ? normalized : normalized + '\n';
       terminalWrite(payload, 'terminal-input-echo');
       interactiveSocket.send(JSON.stringify({ type: 'input', data: payload, newline: false }));
@@ -370,13 +374,26 @@ document.addEventListener('DOMContentLoaded', () => {
       if (event.key === 'Enter') {
         event.preventDefault();
         sendInput(true);
+      } else if (event.key.toLowerCase() === 'c' && event.ctrlKey) {
+        event.preventDefault();
+        if (interactiveSocket?.readyState === WebSocket.OPEN && !terminalFinished) {
+          terminalWrite('^C\n', 'terminal-system');
+          interactiveSocket.send(JSON.stringify({ type: 'stop' }));
+          terminalFinished = true;
+          input.disabled = true;
+          setLoadingState(false);
+          clearTimeoutBar();
+        }
       } else if (event.key.toLowerCase() === 'd' && event.ctrlKey) {
         event.preventDefault();
         if (interactiveSocket?.readyState === WebSocket.OPEN && !terminalFinished) {
-          terminalWrite('^D\n', 'terminal-input-echo');
-          interactiveSocket.send(JSON.stringify({ type: 'eof' }));
-          input.disabled = true;
-          send.disabled = true;
+          if (input.value.length) {
+            sendInput(true);
+          } else {
+            terminalWrite('^D\n', 'terminal-input-echo');
+            interactiveSocket.send(JSON.stringify({ type: 'eof' }));
+            input.disabled = true;
+          }
         }
       }
     });
@@ -404,20 +421,62 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function sourceReadsStdin(source, languageId) {
     const patterns = {
-      c: /\b(scanf|getchar|fgets|fscanf)\s*\(/,
+      c: /\b(scanf|getchar|fgets|fscanf|gets)\s*\(/,
       cpp: /\b(cin|getline|getchar|scanf)\b/,
       java: /\b(Scanner|BufferedReader|System\.in|readLine|nextInt|nextLine|nextDouble)\b/,
       python: /\b(input|stdin\.read|stdin\.readline)\s*\(/,
-      javascript: /\b(readline|createInterface|question|prompt)\s*\(/,
-      typescript: /\b(readline|createInterface|question|prompt)\s*\(/,
+      javascript: /\b(readline|createInterface|question|prompt|readFileSync)\s*\(|\bprocess\.stdin\b/,
+      typescript: /\b(readline|createInterface|question|prompt|readFileSync)\s*\(|\bprocess\.stdin\b/,
       csharp: /\b(ReadLine|ReadKey|ReadToEnd)\s*\(/,
-      go: /\b(Scan|Scanln|Scanf|ReadString|ReadBytes)\s*\(/,
-      rust: /\b(read_line|stdin)\b/,
-      php: /\b(fgets|readline)\s*\(/,
-      ruby: /\b(gets|readline)\b/,
+      go: /\b(Scan|Scanln|Scanf|ReadString|ReadBytes|ReadAll)\s*\(|\bos\.Stdin\b/,
+      rust: /\b(read_line|read_to_string|stdin)\b/,
+      php: /\b(fgets|readline|file_get_contents)\s*\(|php:\/\/stdin/,
+      ruby: /\b(gets|readline)\b|\bSTDIN\.read\b/,
+      ruby_script: /\b(gets|readline)\b|\bSTDIN\.read\b/,
       bash: /\bread\s+/,
+      zsh: /\bread\s+/,
+      fish: /\bread\s+/,
+      powershell: /\b(Read-Host)\b/i,
       pascal: /\b(read|readln)\s*\(/i,
-      fortran: /\bread\s*\s*\(/i
+      fortran: /\bread\s*\(/i,
+      ada: /\b(Get|Get_Line)\s*\(/,
+      basic: /\b(INPUT|LINE INPUT)\b/i,
+      kotlin: /\b(readLine|Scanner|System\.in)\b/,
+      swift: /\b(readLine|readLine\s*\()/,
+      scala: /\b(StdIn\.read|readLine|readInt)\b/,
+      haskell: /\b(getLine|getContents|getChar)\b/,
+      clojure: /\b(read-line|read-string)\b/,
+      lisp: /\b(read-line|read)\b/,
+      'common-lisp': /\b(read-line|read)\b/,
+      scheme: /\b(read-line|read)\b/,
+      racket: /\b(read-line|read)\b/,
+      ocaml: /\b(read_line|read_int|input_line)\b/,
+      erlang: /\bio:get_line|io:read\b/,
+      elixir: /\b(IO\.getn|IO\.gets|IO\.read)\b/,
+      perl: /\b(<STDIN>|readline|chomp)\b/,
+      lua: /\bio\.read|\bio\.stdin\b/,
+      sql: /\b(ACCEPT|PROMPT)\b/i,
+      octave: /\b(input|fscanf|scanf)\s*\(/,
+      r: /\b(readline|scan|readLines)\s*\(/,
+      julia: /\b(readline|read)\s*\(/i,
+      dart: /\b(stdin\.readLineSync|stdin\.listen)\b/,
+      groovy: /\b(System\.in|readLine|nextLine)\b/,
+      fsharp: /\b(Console\.ReadLine|stdin\.ReadLine)\b/,
+      crystal: /\b(gets|read_line)\b/,
+      objectivec: /\b(scanf|fgets|getchar)\s*\(/,
+      vbnet: /\b(Console\.ReadLine)\b/,
+      zig: /\b(stdin|readAll|reader)\b/,
+      vlang: /\b(os\.input|read_line)\b/,
+      cobol: /\b(ACCEPT)\b/i,
+      prolog: /\b(read|read_line_to_string)\s*\(/,
+      awk: /\b(getline)\b/,
+      forth: /\b(ACCEPT|KEY)\b/,
+      brainfuck: /[,]/,
+      verilog: /\$fscanf|\$readmemh|\$readmemb/,
+      vhdl: /\breadline|\bread\s*\(/i,
+      nim: /\breadLine|stdin\b/,
+      d: /\b(readln|readf|stdin)\b/,
+      assembly: /\b(read|scanf|sys_read)\b/i
     };
     return (patterns[languageId] || /\b(input|scanf|cin|readLine|readline|gets|readln|stdin)\b/i).test(source);
   }
@@ -435,7 +494,10 @@ document.addEventListener('DOMContentLoaded', () => {
         signal: ctrl.signal
       });
       const payload = await response.json();
-      if (!response.ok || !payload.success) throw new Error(payload.userMessage || payload.error || `Execution failed (${response.status})`);
+      if (!response.ok || !payload.success) {
+        if (response.status >= 500) throw new Error('Execution service unavailable.');
+        throw new Error(payload.userMessage || 'Program execution failed.');
+      }
       const result = payload.execution || {};
       if (result.compileOutput) terminalWrite(result.compileOutput + (result.compileOutput.endsWith('\n') ? '' : '\n'), 'stderr-chunk');
       if (result.stdout) terminalWrite(result.stdout);
@@ -447,12 +509,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (result.executionTimeMs != null) statExecTime.textContent = `${result.executionTimeMs} ms`;
       if (result.memoryKb != null) statMemory.textContent = `${result.memoryKb} KB`;
       terminalWrite(`\n[Process exited with code ${result.exitCode ?? (result.success ? 0 : 1)}]\n`, 'terminal-system');
-      if (result.success) showToast('Program completed successfully.', 'success');
-      else showToast('Program finished with an error.', 'error');
+      if (result.success) { showToast('Program completed successfully.', 'success'); setRunButtonResult(true); }
+      else { showToast('Program finished with an error.', 'error'); setRunButtonResult(false); }
     } catch (err) {
       if (err.name !== 'AbortError') {
-        terminalWrite(`\n${err.message || 'Execution failed.'}\n`, 'stderr-chunk');
-        showToast('Execution failed.', 'error');
+        const message = err instanceof TypeError ? 'Unable to connect to compiler service.' : (err.message || 'Execution service unavailable.');
+        terminalWrite(`\n${message}\n`, 'stderr-chunk');
+        showToast(message, 'error');
+        setRunButtonResult(false);
       }
     } finally {
       currentAbortCtrl = null;
@@ -462,30 +526,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function showBatchInput(sourceCode, languageId) {
-    terminalWrite('Live input gateway is not connected. Enter standard input below; it will be supplied when the program starts.\n', 'terminal-system');
-    const wrap = document.createElement('div');
-    wrap.className = 'interactive-terminal-input-row';
-    wrap.style.cssText = 'display:flex;flex-direction:column;gap:8px;padding:10px 0;';
-    const area = document.createElement('textarea');
-    area.className = 'interactive-terminal-input';
-    area.rows = 4;
-    area.style.cssText = 'width:100%;min-height:88px;resize:vertical;white-space:pre;font-family:inherit;';
-    area.placeholder = 'Enter program input here (one value per line)…';
-    const run = document.createElement('button');
-    run.type = 'button';
-    run.className = 'terminal-send-button';
-    run.textContent = 'Run with this input';
-    run.addEventListener('click', () => {
-      const stdin = area.value;
-      terminalWrite(stdin ? stdin + (stdin.endsWith('\n') ? '' : '\n') : '[No input supplied]\n', 'terminal-input-echo');
-      wrap.remove();
-      runBatchFallback(sourceCode, languageId, stdin);
-    });
-    wrap.append(area, run);
-    consoleOutput.appendChild(wrap);
-    area.focus();
+  // Batch providers cannot accept keyboard input after a process has started.
+  // Never replace the terminal with a separate stdin textarea: input-driven
+  // programs must use the live terminal session above.
+  function showInteractiveUnavailable(reason = '') {
+    const detail = typeof reason === 'string' && reason.trim()
+      ? reason.trim()
+      : 'Live keyboard input requires the Docker-backed interactive execution gateway.';
+    terminalWrite(`\n✗ Interactive execution unavailable\n${detail}\nCheck the gateway URL, shared ticket secret, Docker daemon and polycompile-exec:latest image.\n`, 'stderr-chunk');
+    terminalFinished = true;
     setLoadingState(false);
+    setRunButtonResult(false);
     clearTimeoutBar();
   }
 
@@ -508,11 +559,17 @@ document.addEventListener('DOMContentLoaded', () => {
     switchTab('consoleTab');
     resetTerminal();
     currentCode = sourceCode;
+    runBtn.classList.remove('run-success', 'run-failed');
     currentLang = languageSelect.value;
     currentAbortCtrl = new AbortController();
+    statExecTime.textContent = '—';
+    statCompileTime.textContent = '—';
+    statMemory.textContent = '—';
+    statExitCode.textContent = '—';
+    statEngine.textContent = 'Connecting…';
     setLoadingState(true, 'Connecting…');
     startTimeoutBar(MAX_RUN_TIMEOUT_MS);
-    terminalWrite('Connecting to interactive execution service…\n', 'terminal-system');
+    terminalWrite(`[${new Date().toLocaleTimeString()}] Execution started — ${currentLang || 'Auto-detect'}\n`, 'terminal-system');
 
     try {
       if (!currentLang || currentLang === 'auto') {
@@ -525,16 +582,44 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       if (!currentLang) throw new Error('Could not identify the language. Select it from the language list and run again.');
 
-      const ticketRes = await fetch('/api/interactive-ticket', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
-        signal: currentAbortCtrl.signal
-      });
-      const ticketData = await ticketRes.json();
+      let ticketRes;
+      let ticketData;
+      let ticketNetworkFailure = false;
+      try {
+        ticketRes = await fetch('/api/interactive-ticket', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+          signal: currentAbortCtrl.signal
+        });
+        ticketData = await ticketRes.json();
+      } catch (ticketError) {
+        if (ticketError.name === 'AbortError') throw ticketError;
+        ticketNetworkFailure = true;
+        ticketRes = { ok: false, status: 0 };
+        ticketData = { success: false };
+      }
+      if (ticketNetworkFailure) {
+        terminalWrite('\nUnable to connect to compiler service.\n', 'stderr-chunk');
+        terminalFinished = true;
+        setLoadingState(false);
+        setRunButtonResult(false);
+        return;
+      }
       if (!ticketRes.ok || !ticketData.success) {
-        // Keep the compiler usable while the separately hosted PTY gateway is not deployed.
-        // Input-driven programs get an inline stdin form; no-input programs execute immediately.
+        if (ticketRes.status >= 500 && ticketRes.status !== 503) {
+          terminalWrite('\nExecution service unavailable.\n', 'stderr-chunk');
+          terminalFinished = true;
+          setLoadingState(false);
+          setRunButtonResult(false);
+          return;
+        }
+        // Keep ordinary no-input programs usable through the existing batch
+        // provider. For stdin programs, do not fall back to a separate input
+        // form or silently run with empty stdin: the terminal must stay the
+        // single place where prompts, user keystrokes, and output appear.
         if (sourceReadsStdin(sourceCode, currentLang)) {
-          showBatchInput(sourceCode, currentLang);
+          // Preserve the backend's actionable setup message (for example,
+          // missing INTERACTIVE_GATEWAY_URL or shared ticket secret).
+          showInteractiveUnavailable(ticketData.userMessage || ticketData.error || 'The interactive execution gateway is not configured.');
           return;
         }
         await runBatchFallback(sourceCode, currentLang, '');
@@ -559,25 +644,62 @@ document.addEventListener('DOMContentLoaded', () => {
       interactiveSocket.onmessage = event => {
         let message;
         try { message = JSON.parse(event.data); } catch (_) { return; }
-        if (message.type === 'ready') {
+        if (message.type === 'compiling') {
+          setLoadingState(true, 'Compiling…');
+          terminalWrite(`[Compiling ${message.language || currentLang}...]\n`, 'terminal-system');
+        } else if (message.type === 'ready') {
           statEngine.textContent = 'PolyCompile Interactive Sandbox';
+          if (message.compileDurationMs != null) statCompileTime.textContent = `${message.compileDurationMs} ms`;
           setLoadingState(true, 'Running…');
-          terminalWrite(`[${message.language || currentLang}] Running…\n`, 'terminal-system');
-          ensureTerminalInput().focus();
+          const compiledMsg = message.compileDurationMs != null && message.compileDurationMs > 0
+            ? `[✓ Compiled in ${message.compileDurationMs}ms — Running...]\n`
+            : `[✓ Ready — Running...]\n`;
+          terminalWrite(compiledMsg, 'terminal-success');
+          terminalWrite('────────────────────\n', 'terminal-system');
+          const inp = ensureTerminalInput();
+          inp.placeholder = 'Type input and press Enter…';
+          inp.focus();
         } else if (message.type === 'stdout') {
-          terminalWrite(message.data || '');
+          if (message.phase !== 'compile' && message.data) terminalProgramOutputSeen = true;
+          terminalWrite(message.data || '', message.phase === 'compile' ? 'compile-output-chunk' : 'stdout-chunk');
         } else if (message.type === 'stderr') {
+          if (message.phase !== 'compile' && message.data) terminalProgramOutputSeen = true;
+          if (message.phase === 'compile' && !terminalCompileErrorShown) {
+            terminalWrite('\n[Compiler diagnostics]\n', 'terminal-system');
+            terminalCompileErrorShown = true;
+          }
           terminalWrite(message.data || '', 'stderr-chunk');
+        } else if (message.type === 'timeout') {
+          if (!terminalTimeoutShown) {
+            terminalWrite('\n✗ Time Limit Exceeded\n' + (message.message || 'Program execution exceeded the allowed time.') + '\n', 'stderr-chunk');
+            terminalTimeoutShown = true;
+          }
+        } else if (message.type === 'service-error') {
+          terminalWrite('\nExecution service unavailable.\n', 'stderr-chunk');
+          terminalFinished = true;
+          closeInteractiveSession(false);
+          setLoadingState(false);
+          setRunButtonResult(false);
+          clearTimeoutBar();
         } else if (message.type === 'error') {
           terminalWrite(`\n${message.message || 'Interactive execution failed.'}\n`, 'stderr-chunk');
           terminalFinished = true;
           setLoadingState(false);
+          setRunButtonResult(false);
           closeInteractiveSession(false);
         } else if (message.type === 'exit') {
           terminalFinished = true;
           statExitCode.textContent = String(message.code);
           statExitCode.style.color = message.code === 0 ? 'var(--color-success)' : 'var(--color-error)';
           if (message.durationMs != null) statExecTime.textContent = `${message.durationMs} ms`;
+          if (message.compileDurationMs != null) statCompileTime.textContent = `${message.compileDurationMs} ms`;
+          if (message.memoryBytes != null) statMemory.textContent = `${(message.memoryBytes / (1024 * 1024)).toFixed(1)} MB`;
+          if (message.timedOut && !terminalTimeoutShown) terminalWrite('\n✗ Time Limit Exceeded\n', 'stderr-chunk');
+          else if (message.compileFailed) terminalWrite('\n✗ Compilation Failed\n', 'stderr-chunk');
+          else if (message.code === 0) {
+            terminalWrite('\n[✓ Process finished with exit code 0]\n', 'terminal-success');
+            if (!terminalProgramOutputSeen) terminalWrite('Program executed successfully. No output generated.\n', 'terminal-system');
+          } else terminalWrite(`\n[✗ Process exited with code ${message.code}]\n`, 'stderr-chunk');
           terminalWrite(`\n[Process exited with code ${message.code}]\n`, 'terminal-system');
           if (terminalInput) terminalInput.disabled = true;
           const send = terminalInputRow?.querySelector('button');
@@ -585,32 +707,38 @@ document.addEventListener('DOMContentLoaded', () => {
           if (message.code === 0) showToast('Program completed successfully.', 'success');
           else showToast(`Program exited with code ${message.code}.`, 'error');
           setLoadingState(false);
+          setRunButtonResult(message.code === 0);
           clearTimeoutBar();
         } else if (message.type === 'closed' && !terminalFinished) {
           terminalWrite('\n[Execution container closed unexpectedly]\n', 'stderr-chunk');
           terminalFinished = true;
           setLoadingState(false);
+          setRunButtonResult(false);
           clearTimeoutBar();
         }
       };
 
       interactiveSocket.onerror = () => {
-        if (!terminalFinished) terminalWrite('\nInteractive connection failed. Check the gateway URL, TLS, and shared ticket secret.\n', 'stderr-chunk');
+        if (!terminalFinished) terminalWrite('\nUnable to connect to compiler service.\n', 'stderr-chunk');
         terminalFinished = true;
         setLoadingState(false);
+        setRunButtonResult(false);
         clearTimeoutBar();
       };
       interactiveSocket.onclose = () => {
         if (isRunning) {
           setLoadingState(false);
+          if (!terminalFinished) setRunButtonResult(false);
           clearTimeoutBar();
         }
         interactiveSocket = null;
       };
     } catch (err) {
       if (err.name !== 'AbortError') {
-        terminalWrite(`\n${err.message || 'Could not start interactive execution.'}\n`, 'stderr-chunk');
-        showToast('Interactive execution could not start.', 'error');
+        const message = err instanceof TypeError ? 'Unable to connect to compiler service.' : 'Execution service unavailable.';
+        terminalWrite(`\n${message}\n`, 'stderr-chunk');
+        showToast(message, 'error');
+        setRunButtonResult(false);
       }
       closeInteractiveSession(false);
       setLoadingState(false);
@@ -623,42 +751,242 @@ document.addEventListener('DOMContentLoaded', () => {
   /* =========================================================
      INSPECT COMPILER PHASES & CONTROLS
   ========================================================= */
+  let lastPhaseTokens = [];
+  let activeTokenFilter = 'ALL';
+
   async function inspectPhases() {
-    const sourceCode  = codeEditor.value;
+    const sourceCode = codeEditor.value;
     const selectedLang = languageSelect.value;
-    if (!sourceCode.trim()) return;
+    if (!sourceCode.trim()) {
+      showToast('Enter code before inspecting compiler phases.', 'warning');
+      return;
+    }
+    if (isRunning) {
+      showToast('Wait for the current operation to finish.', 'warning');
+      return;
+    }
 
     if (window.innerWidth <= 900) setResponsiveView('output');
-    setLoadingState(true, 'Analyzing…');
+    if (statusText) statusText.textContent = 'Analyzing';
+    inspectPhasesBtn.disabled = true;
+    inspectPhasesBtn.classList.add('is-loading');
+    const originalLabel = inspectPhasesBtn.querySelector('span')?.textContent || 'Inspect Phases';
+    if (inspectPhasesBtn.querySelector('span')) inspectPhasesBtn.querySelector('span').textContent = 'Analyzing…';
 
     try {
       const res = await fetch('/api/compile-phases', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sourceCode,
-          languageId: selectedLang === 'auto' ? null : selectedLang
-        }),
+        body: JSON.stringify({ sourceCode, languageId: selectedLang === 'auto' ? null : selectedLang }),
         signal: AbortSignal.timeout(30000)
       });
-      const data = await res.json();
-      setLoadingState(false);
-      if (data.success) {
-        populateCompilerPhases(data.phases);
-        switchTab('lexicalTab');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.userMessage || data.error || `Analysis failed (${res.status}).`);
+      populateCompilerPhases(data.phases);
+      switchTab('lexicalTab');
+      if (statusText) statusText.textContent = 'Analysis complete';
+      showToast('Compiler phases inspected successfully.', 'success');
+    } catch (error) {
+      const message = error.name === 'TimeoutError' ? 'Compiler phase analysis timed out.' : (error.message || 'Unable to inspect compiler phases.');
+      showToast(message, 'error');
+      if (statusText) statusText.textContent = 'Analysis failed';
+    } finally {
+      inspectPhasesBtn.disabled = false;
+      inspectPhasesBtn.classList.remove('is-loading');
+      if (inspectPhasesBtn.querySelector('span')) inspectPhasesBtn.querySelector('span').textContent = originalLabel;
+    }
+  }
+
+  function setMetric(id, value, suffix = '') {
+    const node = document.getElementById(id);
+    if (node) node.textContent = `${value ?? 0}${suffix}`;
+  }
+
+  function appendCell(row, value) {
+    const cell = document.createElement('td');
+    cell.textContent = value == null ? '—' : String(value);
+    row.appendChild(cell);
+  }
+
+  function renderTableBody(id, rows, columns, emptyMessage) {
+    const body = document.getElementById(id);
+    if (!body) return;
+    body.replaceChildren();
+    if (!Array.isArray(rows) || rows.length === 0) {
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = columns;
+      cell.className = 'empty-cell';
+      cell.textContent = emptyMessage;
+      row.appendChild(cell);
+      body.appendChild(row);
+      return;
+    }
+    const fragment = document.createDocumentFragment();
+    rows.forEach(values => {
+      const row = document.createElement('tr');
+      values.forEach(value => appendCell(row, value));
+      fragment.appendChild(row);
+    });
+    body.appendChild(fragment);
+  }
+
+  function renderTokenTable() {
+    const filtered = activeTokenFilter === 'ALL'
+      ? lastPhaseTokens
+      : lastPhaseTokens.filter(token => token.type === activeTokenFilter || (activeTokenFilter === 'DELIMITER' && ['DELIMITER', 'PUNCTUATION'].includes(token.type)));
+    renderTableBody('tokensTableBody', filtered.map((token, index) => [token.id ?? index + 1, token.type, token.value, token.line, token.col, token.length ?? String(token.value || '').length]), 6, 'No tokens match this filter.');
+  }
+
+  function renderAstTree(ast) {
+    const root = document.getElementById('astVisualTree');
+    if (!root) return;
+    root.replaceChildren();
+    if (!ast) {
+      root.textContent = 'No AST was generated.';
+      return;
+    }
+    let rendered = 0;
+    const maxNodes = 1500;
+    function makeNode(node, depth = 0) {
+      if (!node || typeof node !== 'object' || rendered >= maxNodes || depth > 80) return null;
+      rendered++;
+      const details = document.createElement('details');
+      details.className = 'ast-tree-node';
+      details.open = depth < 2;
+      const summary = document.createElement('summary');
+      const type = document.createElement('strong');
+      type.textContent = node.type || 'Node';
+      summary.appendChild(type);
+      const attrs = Object.entries(node).filter(([key, value]) => !['type', 'body', 'members'].includes(key) && (typeof value !== 'object' || value === null));
+      if (attrs.length) {
+        const meta = document.createElement('span');
+        meta.className = 'ast-node-meta';
+        meta.textContent = attrs.map(([key, value]) => `${key}: ${String(value)}`).join(' · ').slice(0, 300);
+        summary.appendChild(meta);
       }
-    } catch {
-      setLoadingState(false);
+      details.appendChild(summary);
+      const children = [...(Array.isArray(node.body) ? node.body : []), ...(Array.isArray(node.members) ? node.members : [])];
+      children.forEach(child => {
+        const childNode = makeNode(child, depth + 1);
+        if (childNode) details.appendChild(childNode);
+      });
+      return details;
+    }
+    const tree = makeNode(ast);
+    if (tree) root.appendChild(tree);
+    if (rendered >= maxNodes) {
+      const note = document.createElement('p');
+      note.className = 'empty-state';
+      note.textContent = `AST display limited to ${maxNodes.toLocaleString()} nodes for browser performance.`;
+      root.appendChild(note);
     }
   }
 
   function populateCompilerPhases(phases) {
-    if (!phases) return;
-    const p1 = phases.phase1_lexical || phases.lexical;
-    if (p1 && document.getElementById('lexTotalTokens')) {
-      document.getElementById('lexTotalTokens').textContent = p1.totalTokens || p1.tokens?.length || 0;
+    if (!phases) throw new Error('Compiler analysis returned no phase data.');
+    const p1 = phases.phase1_lexical || phases.lexical || {};
+    const p2 = phases.phase2_syntax || phases.syntax || {};
+    const p3 = phases.phase3_semantic || phases.semantic || {};
+    const p4 = phases.phase4_intermediate || phases.intermediate || {};
+    const p5 = phases.phase5_optimization || phases.optimization || {};
+    const tokens = Array.isArray(p1.tokens) ? p1.tokens : [];
+    const lexMetrics = p1.metrics || {};
+    const astMetrics = p2.metrics || {};
+    const symbols = Array.isArray(p3.symbolTable) ? p3.symbolTable : [];
+    const scopes = Array.isArray(p3.scopes) ? p3.scopes : [];
+    const warnings = Array.isArray(p3.warnings) ? p3.warnings : [];
+    const quads = Array.isArray(p4.quadruples) ? p4.quadruples : [];
+    const blocks = Array.isArray(p4.basicBlocks) ? p4.basicBlocks : [];
+    const bytecode = Array.isArray(p5.bytecode) ? p5.bytecode : [];
+
+    lastPhaseTokens = tokens;
+    renderTokenTable();
+    setMetric('lexTotalTokens', p1.totalTokens ?? lexMetrics.totalTokens ?? tokens.length);
+    setMetric('lexUniqueTokens', lexMetrics.uniqueTokens ?? new Set(tokens.map(t => t.value)).size);
+    setMetric('lexKwDensity', lexMetrics.keywordDensity ?? 0, '%');
+    setMetric('lexIdDensity', lexMetrics.identifierDensity ?? 0, '%');
+
+    setMetric('astTotalNodes', astMetrics.totalAstNodes ?? 0);
+    setMetric('astTreeDepth', astMetrics.treeDepth ?? 0);
+    setMetric('astComplexity', astMetrics.cyclomaticComplexity ?? 1);
+    renderAstTree(p2.ast);
+    const jsonViewer = document.getElementById('astJsonViewer');
+    if (jsonViewer) jsonViewer.textContent = JSON.stringify(p2.ast || {}, null, 2);
+
+    setMetric('semTotalSymbols', symbols.length);
+    setMetric('semTotalScopes', scopes.length);
+    setMetric('semTotalWarnings', warnings.length);
+    renderTableBody('symbolTableBody', symbols.map(symbol => [symbol.name, symbol.kind, symbol.type, symbol.scope, symbol.definedLine, Array.isArray(symbol.usages) ? symbol.usages.length : 0]), 6, 'No symbols were identified.');
+
+    const tac = Array.isArray(p4.tac) ? p4.tac : [];
+    const tacNode = document.getElementById('tacCodeBlock');
+    if (tacNode) tacNode.textContent = tac.join('\n') || '// No intermediate representation generated.';
+    renderTableBody('quadsTableBody', quads.map(q => [q.id, q.op, q.arg1, q.arg2, q.result]), 5, 'No quadruples generated.');
+    const cfgNode = document.getElementById('cfgBlocksContainer');
+    if (cfgNode) {
+      cfgNode.replaceChildren();
+      if (!blocks.length) cfgNode.textContent = 'No basic blocks generated.';
+      blocks.forEach(block => {
+        const card = document.createElement('section');
+        card.className = 'cfg-block-card';
+        const heading = document.createElement('h4');
+        heading.textContent = block.label || `Block B${block.id}`;
+        const pre = document.createElement('pre');
+        pre.className = 'cfg-block-code';
+        pre.textContent = Array.isArray(block.instructions) ? block.instructions.join('\n') : '';
+        card.append(heading, pre);
+        cfgNode.appendChild(card);
+      });
+    }
+
+    const asmNode = document.getElementById('asmCodeBlock');
+    if (asmNode) asmNode.textContent = p5.assemblyCode || '; No target representation generated.';
+    renderTableBody('bytecodeTableBody', bytecode.map(item => [item.opcode, item.arg, item.comment]), 3, 'No bytecode emitted.');
+    const optList = document.getElementById('optPassList');
+    if (optList) {
+      optList.replaceChildren();
+      const passes = Array.isArray(p5.optimizationsApplied) ? p5.optimizationsApplied : [];
+      (passes.length ? passes : ['No optimization passes reported.']).forEach(pass => {
+        const li = document.createElement('li');
+        li.textContent = pass;
+        optList.appendChild(li);
+      });
+    }
+
+    // The compiler-analysis pipeline is an educational, language-aware model;
+    // it is not the native compiler's AST or machine code for every language.
+    const phaseErrors = [...(p1.errors || []), ...(p2.errors || []), ...(p3.errors || [])];
+    const diagnosticsNode = document.getElementById('diagnosticsContainer');
+    const allDiagnostics = [...phaseErrors, ...warnings].slice(0, 250);
+    const diagBadge = document.getElementById('diagCountBadge');
+    if (diagBadge) {
+      diagBadge.textContent = String(allDiagnostics.length);
+      diagBadge.style.display = allDiagnostics.length ? 'inline-flex' : 'none';
+    }
+    if (diagnosticsNode) {
+      diagnosticsNode.replaceChildren();
+      if (!allDiagnostics.length) diagnosticsNode.textContent = 'No analysis diagnostics reported.';
+      allDiagnostics.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'diagnostic-item';
+        row.textContent = `${item.line ? `Line ${item.line}${item.col ? `, Col ${item.col}` : ''}: ` : ''}${item.message || 'Diagnostic'}`;
+        diagnosticsNode.appendChild(row);
+      });
     }
   }
+
+  document.querySelectorAll('.filter-chip').forEach(button => button.addEventListener('click', () => {
+    activeTokenFilter = button.dataset.filter || 'ALL';
+    document.querySelectorAll('.filter-chip').forEach(item => item.classList.toggle('active', item === button));
+    renderTokenTable();
+  }));
+  document.getElementById('expandAstBtn')?.addEventListener('click', () => document.querySelectorAll('#astVisualTree details').forEach(node => { node.open = true; }));
+  document.getElementById('collapseAstBtn')?.addEventListener('click', () => document.querySelectorAll('#astVisualTree details').forEach(node => { node.open = false; }));
+  document.getElementById('toggleRawJsonBtn')?.addEventListener('click', () => {
+    const viewer = document.getElementById('astJsonViewer');
+    if (viewer) viewer.style.display = viewer.style.display === 'none' ? 'block' : 'none';
+  });
 
   function setLoadingState(loading, label = 'Compiling…') {
     isRunning = loading;
@@ -668,10 +996,20 @@ document.addEventListener('DOMContentLoaded', () => {
       runBtnText.textContent = label;
     } else {
       runBtn.disabled = false;
-      runBtnIcon.className = 'fa-solid fa-play';
-      runBtnText.innerHTML = 'Run &amp; Compile';
+      if (!runBtn.classList.contains('run-success') && !runBtn.classList.contains('run-failed')) {
+        runBtnIcon.className = 'fa-solid fa-play';
+        runBtnText.innerHTML = 'Run &amp; Compile';
+      }
       clearTimeoutBar();
     }
+  }
+
+  function setRunButtonResult(success) {
+    runBtn.classList.remove('run-success', 'run-failed');
+    runBtn.classList.add(success ? 'run-success' : 'run-failed');
+    runBtn.disabled = false;
+    runBtnIcon.className = success ? 'fa-solid fa-check' : 'fa-solid fa-circle-exclamation';
+    runBtnText.textContent = success ? 'Success' : 'Failed';
   }
 
   tabButtons.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
@@ -701,18 +1039,33 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function clearConsole() {
-    if (isRunning) {
-      closeInteractiveSession(true);
-      if (currentAbortCtrl) currentAbortCtrl.abort();
-      setLoadingState(false);
-    }
-    consoleOutput.innerHTML = `<div class="console-placeholder"><p>Run your program, then enter values in this terminal when prompted.</p></div>`;
-    terminalText = null;
+    // Clear only the visible transcript. Never kill a running process just
+    // because the user wants a clean terminal view. Preserve unsent input.
+    const pendingLine = terminalInput?.value || '';
+    consoleOutput.innerHTML = '';
+    terminalText = document.createElement('pre');
+    terminalText.className = 'interactive-terminal-text';
+    consoleOutput.appendChild(terminalText);
     terminalInput = null;
     terminalInputRow = null;
+    if (interactiveSocket?.readyState === WebSocket.OPEN && !terminalFinished) {
+      const input = ensureTerminalInput();
+      input.value = pendingLine;
+      input.focus();
+    }
   }
 
   clearConsoleBtn.addEventListener('click', clearConsole);
+
+  if (copyOutputBtn) copyOutputBtn.addEventListener('click', async () => {
+    const text = terminalText?.textContent || consoleOutput.innerText || '';
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast('Output copied to clipboard.', 'success');
+    } catch (_) {
+      showToast('Unable to copy output. Check clipboard permissions.', 'error');
+    }
+  });
 
   const abortRunBtn = document.getElementById('abortRunBtn');
   if (abortRunBtn) abortRunBtn.addEventListener('click', () => {

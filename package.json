@@ -6,10 +6,14 @@
   "scripts": {
     "start": "node server.js",
     "prod": "NODE_ENV=production node server.js",
-    "test": "node test.js && node execution-policy.test.js",
+    "test": "node test.js && node execution-policy.test.js && node interactive-terminal.test.js && node compiler-phases.test.js && node interactive-runner/pty-protocol.test.js && node interactive-runner/test-session-runner.js && node local-interactive.test.js",
+    "test:local-interactive": "node local-interactive.test.js",
     "verify": "node verify_all.js",
     "stress": "node complex_runtime_test.js",
-    "verify:interactive": "node interactive-runner/verify-registry.js"
+    "verify:interactive": "node interactive-runner/verify-registry.js",
+    "verify:interactive:e2e": "node interactive-runner/test-session-runner.js",
+    "verify:interactive:runtime": "docker run --rm --network none --memory 1g --memory-swap 1g --cpus 1 --entrypoint node polycompile-exec:latest /opt/runtime-smoke-test.js",
+    "verify:interactive:input": "node interactive-runner/test-session-runner.js"
   },
   "keywords": [
     "compiler",

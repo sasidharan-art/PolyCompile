@@ -1,0 +1,387 @@
+[
+  {
+    "id": "c",
+    "sourceFile": "main.c",
+    "expected": "C execution works!",
+    "source": "#include <stdio.h>\nint main(void) { puts(\"C execution works!\"); return 0; }",
+    "stdin": ""
+  },
+  {
+    "id": "cpp",
+    "sourceFile": "main.cpp",
+    "expected": "C++ execution works!",
+    "source": "#include <iostream>\nint main() { std::cout << \"C++ execution works!\" << std::endl; }",
+    "stdin": ""
+  },
+  {
+    "id": "java",
+    "sourceFile": "Main.java",
+    "expected": "Java execution works!",
+    "source": "public class Main { public static void main(String[] args) { System.out.println(\"Java execution works!\"); } }",
+    "stdin": ""
+  },
+  {
+    "id": "python",
+    "sourceFile": "main.py",
+    "expected": "Python execution works!",
+    "source": "print(\"Python execution works!\")",
+    "stdin": ""
+  },
+  {
+    "id": "javascript",
+    "sourceFile": "main.js",
+    "expected": "JavaScript execution works!",
+    "source": "console.log(\"JavaScript execution works!\");",
+    "stdin": ""
+  },
+  {
+    "id": "typescript",
+    "sourceFile": "main.ts",
+    "expected": "TypeScript execution works!",
+    "source": "console.log(\"TypeScript execution works!\");",
+    "stdin": ""
+  },
+  {
+    "id": "go",
+    "sourceFile": "main.go",
+    "expected": "Go execution works!",
+    "source": "package main\nimport \"fmt\"\nfunc main() { fmt.Println(\"Go execution works!\") }",
+    "stdin": ""
+  },
+  {
+    "id": "rust",
+    "sourceFile": "main.rs",
+    "expected": "Rust execution works!",
+    "source": "fn main() { println!(\"Rust execution works!\"); }",
+    "stdin": ""
+  },
+  {
+    "id": "ruby",
+    "sourceFile": "main.rb",
+    "expected": "Ruby execution works!",
+    "source": "puts \"Ruby execution works!\"",
+    "stdin": ""
+  },
+  {
+    "id": "php",
+    "sourceFile": "main.php",
+    "expected": "PHP execution works!",
+    "source": "<?php echo \"PHP execution works!\\n\";",
+    "stdin": ""
+  },
+  {
+    "id": "perl",
+    "sourceFile": "main.pl",
+    "expected": "Perl execution works!",
+    "source": "print \"Perl execution works!\\n\";",
+    "stdin": ""
+  },
+  {
+    "id": "lua",
+    "sourceFile": "main.lua",
+    "expected": "Lua execution works!",
+    "source": "print(\"Lua execution works!\")",
+    "stdin": ""
+  },
+  {
+    "id": "bash",
+    "sourceFile": "main.sh",
+    "expected": "Bash execution works!",
+    "source": "echo \"Bash execution works!\"",
+    "stdin": ""
+  },
+  {
+    "id": "kotlin",
+    "sourceFile": "Main.kt",
+    "expected": "Kotlin execution works!",
+    "source": "fun main() { println(\"Kotlin execution works!\") }",
+    "stdin": ""
+  },
+  {
+    "id": "scala",
+    "sourceFile": "Main.scala",
+    "expected": "Scala execution works!",
+    "source": "object Main { def main(args: Array[String]): Unit = println(\"Scala execution works!\") }",
+    "stdin": ""
+  },
+  {
+    "id": "csharp",
+    "sourceFile": "Main.cs",
+    "expected": "C# execution works!",
+    "source": "using System;\nclass Program { static void Main() { Console.WriteLine(\"C# execution works!\"); } }",
+    "stdin": ""
+  },
+  {
+    "id": "r",
+    "sourceFile": "main.R",
+    "expected": "R execution works!",
+    "source": "cat(\"R execution works!\\n\")",
+    "stdin": ""
+  },
+  {
+    "id": "fortran",
+    "sourceFile": "main.f90",
+    "expected": "Fortran execution works!",
+    "source": "program main\nprint *, \"Fortran execution works!\"\nend program main",
+    "stdin": ""
+  },
+  {
+    "id": "pascal",
+    "sourceFile": "main.pas",
+    "expected": "Pascal execution works!",
+    "source": "program Main;\nbegin\n  writeln('Pascal execution works!');\nend.",
+    "stdin": ""
+  },
+  {
+    "id": "haskell",
+    "sourceFile": "main.hs",
+    "expected": "Haskell execution works!",
+    "source": "main = putStrLn \"Haskell execution works!\"",
+    "stdin": ""
+  },
+  {
+    "id": "ocaml",
+    "sourceFile": "main.ml",
+    "expected": "OCaml execution works!",
+    "source": "print_endline \"OCaml execution works!\";;",
+    "stdin": ""
+  },
+  {
+    "id": "scheme",
+    "sourceFile": "main.scm",
+    "expected": "Scheme execution works!",
+    "source": "(display \"Scheme execution works!\") (newline)",
+    "stdin": ""
+  },
+  {
+    "id": "tcl",
+    "sourceFile": "main.tcl",
+    "expected": "Tcl execution works!",
+    "source": "puts \"Tcl execution works!\"",
+    "stdin": ""
+  },
+  {
+    "id": "sql",
+    "sourceFile": "main.sql",
+    "expected": "SQL execution works!",
+    "source": "SELECT 'SQL execution works!';",
+    "stdin": "\u0004"
+  },
+  {
+    "id": "octave",
+    "sourceFile": "main.m",
+    "expected": "Octave execution works!",
+    "source": "disp(\"Octave execution works!\");",
+    "stdin": ""
+  },
+  {
+    "id": "ada",
+    "sourceFile": "main.adb",
+    "expected": "Ada execution works!",
+    "source": "with Ada.Text_IO; use Ada.Text_IO;\nprocedure Main is\nbegin\n  Put_Line (\"Ada execution works!\");\nend Main;",
+    "stdin": ""
+  },
+  {
+    "id": "d",
+    "sourceFile": "main.d",
+    "expected": "D execution works!",
+    "source": "import std.stdio;\nvoid main() { writeln(\"D execution works!\"); }",
+    "stdin": ""
+  },
+  {
+    "id": "assembly",
+    "sourceFile": "main.asm",
+    "expected": "Assembly execution works!",
+    "source": "global _start\nsection .data\nmsg db \"Assembly execution works!\", 10\nlen equ $ - msg\nsection .text\n_start:\n    mov rax, 1\n    mov rdi, 1\n    mov rsi, msg\n    mov rdx, len\n    syscall\n    mov rax, 60\n    xor rdi, rdi\n    syscall",
+    "stdin": ""
+  },
+  {
+    "id": "cobol",
+    "sourceFile": "main.cob",
+    "expected": "COBOL execution works!",
+    "source": "       IDENTIFICATION DIVISION.\n       PROGRAM-ID. HELLO.\n       PROCEDURE DIVISION.\n           DISPLAY \"COBOL execution works!\".\n           STOP RUN.",
+    "stdin": ""
+  },
+  {
+    "id": "prolog",
+    "sourceFile": "main.pro",
+    "expected": "Prolog execution works!",
+    "source": "main :- writeln('Prolog execution works!').",
+    "stdin": ""
+  },
+  {
+    "id": "verilog",
+    "sourceFile": "main.v",
+    "expected": "Verilog execution works!",
+    "source": "module main;\ninitial begin\n  $display(\"Verilog execution works!\");\n  $finish;\nend\nendmodule",
+    "stdin": ""
+  },
+  {
+    "id": "vhdl",
+    "sourceFile": "main.vhd",
+    "expected": "VHDL execution works!",
+    "source": "library std;\nuse std.env.all;\nentity main is end entity;\narchitecture sim of main is\nbegin\n  process\n  begin\n    report \"VHDL execution works!\" severity note;\n    finish;\n    wait;\n  end process;\nend architecture;",
+    "stdin": ""
+  },
+  {
+    "id": "clojure",
+    "sourceFile": "main.clj",
+    "expected": "Clojure execution works!",
+    "source": "(println \"Clojure execution works!\")",
+    "stdin": ""
+  },
+  {
+    "id": "erlang",
+    "sourceFile": "main.erl",
+    "expected": "Erlang execution works!",
+    "source": "-module(main).\n-export([main/0]).\nmain() -> io:format(\"Erlang execution works!~n\").",
+    "stdin": ""
+  },
+  {
+    "id": "elixir",
+    "sourceFile": "main.exs",
+    "expected": "Elixir execution works!",
+    "source": "IO.puts(\"Elixir execution works!\")",
+    "stdin": ""
+  },
+  {
+    "id": "awk",
+    "sourceFile": "main.awk",
+    "expected": "AWK execution works!",
+    "source": "BEGIN { print \"AWK execution works!\" }",
+    "stdin": ""
+  },
+  {
+    "id": "basic",
+    "sourceFile": "main.bas",
+    "expected": "BASIC execution works!",
+    "source": "10 PRINT \"BASIC execution works!\"\n20 END",
+    "stdin": "SYSTEM\n"
+  },
+  {
+    "id": "brainfuck",
+    "sourceFile": "main.bf",
+    "expected": "A",
+    "source": "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++.",
+    "stdin": ""
+  },
+  {
+    "id": "nim",
+    "sourceFile": "main.nim",
+    "expected": "Nim execution works!",
+    "source": "echo \"Nim execution works!\"",
+    "stdin": ""
+  },
+  {
+    "id": "forth",
+    "sourceFile": "main.fs",
+    "expected": "Forth execution works!",
+    "source": ".\" Forth execution works!\" cr",
+    "stdin": "bye\n"
+  },
+  {
+    "id": "fish",
+    "sourceFile": "main.fish",
+    "expected": "Fish execution works!",
+    "source": "echo \"Fish execution works!\"",
+    "stdin": ""
+  },
+  {
+    "id": "ruby_script",
+    "sourceFile": "main.rb",
+    "expected": "Ruby Script execution works!",
+    "source": "puts \"Ruby Script execution works!\"",
+    "stdin": ""
+  },
+  {
+    "id": "lisp",
+    "sourceFile": "main.lisp",
+    "expected": "Lisp execution works!",
+    "source": "(format t \"Lisp execution works!~%\")",
+    "stdin": ""
+  },
+  {
+    "id": "swift",
+    "sourceFile": "main.swift",
+    "expected": "Swift execution works!",
+    "source": "print(\"Swift execution works!\")",
+    "stdin": ""
+  },
+  {
+    "id": "zig",
+    "sourceFile": "main.zig",
+    "expected": "Zig execution works!",
+    "source": "const std = @import(\"std\");\npub fn main() !void {\n    const stdout = std.io.getStdOut().writer();\n    try stdout.print(\"Zig execution works!\\n\", .{});\n}",
+    "stdin": ""
+  },
+  {
+    "id": "julia",
+    "sourceFile": "main.jl",
+    "expected": "Julia execution works!",
+    "source": "println(\"Julia execution works!\")",
+    "stdin": ""
+  },
+  {
+    "id": "dart",
+    "sourceFile": "main.dart",
+    "expected": "Dart execution works!",
+    "source": "void main() { print(\"Dart execution works!\"); }",
+    "stdin": ""
+  },
+  {
+    "id": "groovy",
+    "sourceFile": "main.groovy",
+    "expected": "Groovy execution works!",
+    "source": "println 'Groovy execution works!'",
+    "stdin": ""
+  },
+  {
+    "id": "fsharp",
+    "sourceFile": "main.fsx",
+    "expected": "F# execution works!",
+    "source": "printfn \"F# execution works!\"",
+    "stdin": ""
+  },
+  {
+    "id": "crystal",
+    "sourceFile": "main.cr",
+    "expected": "Crystal execution works!",
+    "source": "puts \"Crystal execution works!\"",
+    "stdin": ""
+  },
+  {
+    "id": "objectivec",
+    "sourceFile": "main.m",
+    "expected": "Objective-C execution works!",
+    "source": "#import <Foundation/Foundation.h>\nint main(void) { NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init]; NSLog(@\"Objective-C execution works!\"); [pool drain]; return 0; }",
+    "stdin": ""
+  },
+  {
+    "id": "vbnet",
+    "sourceFile": "main.vb",
+    "expected": "VB.NET execution works!",
+    "source": "Imports System\nModule Program\n  Sub Main()\n    Console.WriteLine(\"VB.NET execution works!\")\n  End Sub\nEnd Module",
+    "stdin": ""
+  },
+  {
+    "id": "powershell",
+    "sourceFile": "main.ps1",
+    "expected": "PowerShell execution works!",
+    "source": "Write-Output \"PowerShell execution works!\"",
+    "stdin": ""
+  },
+  {
+    "id": "racket",
+    "sourceFile": "main.rkt",
+    "expected": "Racket execution works!",
+    "source": "#lang racket\n(displayln \"Racket execution works!\")",
+    "stdin": ""
+  },
+  {
+    "id": "vlang",
+    "sourceFile": "main.v",
+    "expected": "V execution works!",
+    "source": "fn main() { println('V execution works!') }",
+    "stdin": ""
+  }
+]

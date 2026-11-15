@@ -1,15 +1,21 @@
-# Programiz-style Input and Output workflow
+# PolyCompile integrated terminal execution
 
-PolyCompile now presents a dedicated **Input (stdin)** editor above a separate **Output** console, following the familiar online-compiler workflow visible on Programiz: edit source, provide standard input, click Run, and inspect the resulting output.
+PolyCompile uses one integrated terminal for program output and live keyboard input. There is no separate stdin textarea or pre-run input form.
 
 ## User workflow
-1. Select the required language (or Auto-Detect).
-2. Enter source code in the editor.
-3. Enter runtime input in the **Input (stdin)** box. Put each input value on its own line; paste multiple lines when needed.
-4. Click **Run & Compile** (or Ctrl+Enter).
-5. Read stdout, stderr, and exit status in the Output console.
+1. Select a language from the existing 55-language catalogue and write code in the existing editor.
+2. Click **Run**. The output terminal opens and the interactive service starts the program.
+3. Compiler diagnostics appear during compilation; runtime stdout and stderr stream into the same terminal with separate visual styles.
+4. When the program requests input, type directly on the terminal prompt and press **Enter**. Each submitted line is forwarded to the running process stdin; blank lines and spaces are preserved.
+5. Continue entering lines for loops, repeated prompts, and conditional input. Multi-line paste is forwarded as a block with its line breaks intact.
+6. Press **Ctrl+D** on an empty terminal line to send EOF where the language/runtime supports it. Press **Ctrl+C** to stop the current run.
 
-Input is sent as standard input to the selected execution provider. This is a batch-stdin workflow; it does not promise live, character-by-character stdin streaming after the program has started. A true live interactive session requires a reachable interactive execution gateway with the required language runtimes.
+## Execution modes
+- **Interactive mode:** requires `INTERACTIVE_GATEWAY_URL` and `INTERACTIVE_TICKET_SECRET` on the web service, plus the same ticket secret on the separately deployed Docker gateway. It provides live PTY-backed stdin/stdout/stderr streaming.
+- **Batch fallback:** retained only for programs that do not appear to read stdin. Batch providers receive stdin before execution and cannot accept new keyboard input after the process starts. If an input-driven program is detected while the live gateway is unavailable, the terminal reports that interactive execution is unavailable; it never opens a separate stdin box or silently pretends the process is interactive.
+
+## Language coverage
+The compiler catalogue contains **55 languages**. `runner/languages.json` now has a runtime entry for every catalogue ID (61 total entries including non-catalogue compatibility aliases). The runtime image performs a strict executable-presence check and a 55-language compile/launch smoke test during its Docker build. The image must build successfully before claiming all 55 languages are deployable. The separate interactive PTY suite also checks repeated line input, prompts without newlines, spaces, blank lines, Unicode, numeric/character input, and EOF for the tested mainstream runtimes.
 
 ## Deployment
-Push the changed files and let the existing Render service deploy. The application uses its configured Judge0/Wandbox/Piston provider for execution; make sure the provider environment variables and network access are configured in Render. Do not enable the unsafe Local Runtime option in production.
+The interactive gateway is a separate Docker-backed service; the existing Node web service does not itself launch Docker containers. Build the execution image and gateway image on a dedicated Linux Docker host. Set `INTERACTIVE_GATEWAY_URL=wss://YOUR-GATEWAY-DOMAIN/session` and `INTERACTIVE_TICKET_SECRET` on the web service. Set the identical secret and `EXECUTION_IMAGE=polycompile-exec:latest` on the gateway. Expose the gateway through a TLS reverse proxy with WebSocket upgrade support. See `INTERACTIVE_TERMINAL_DEPLOYMENT.md` for the exact steps and security notes.

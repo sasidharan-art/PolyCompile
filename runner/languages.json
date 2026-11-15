@@ -96,6 +96,7 @@
     "sourceFile": "main.js",
     "run": [
       "node",
+      "/opt/polycompile/js-runner.js",
       "/work/main.js"
     ]
   },
@@ -110,9 +111,14 @@
     "compiled": true,
     "sourceFile": "main.ts",
     "run": [
+      "node",
+      "/opt/polycompile/js-runner.js",
+      "/exec/tsout/main.js"
+    ],
+    "compile": [
       "sh",
       "-lc",
-      "cd /work && tsc main.ts --target ES2022 --module commonjs --outDir /exec/tsout && node /exec/tsout/main.js"
+      "cd /work && tsc main.ts --target ES2022 --module commonjs --outDir /exec/tsout"
     ]
   },
   {
@@ -126,9 +132,14 @@
     "compiled": true,
     "sourceFile": "main.go",
     "run": [
-      "sh",
-      "-lc",
-      "cd /work && go run main.go"
+      "/exec/program"
+    ],
+    "compile": [
+      "go",
+      "build",
+      "-o",
+      "/exec/program",
+      "/work/main.go"
     ]
   },
   {
@@ -141,10 +152,14 @@
     "paradigm": "Systems / multi-paradigm",
     "compiled": true,
     "sourceFile": "main.rs",
+    "compile": [
+      "rustc",
+      "/work/main.rs",
+      "-o",
+      "/exec/program"
+    ],
     "run": [
-      "sh",
-      "-lc",
-      "rustc /work/main.rs -o /exec/program && /exec/program"
+      "/exec/program"
     ]
   },
   {
@@ -452,8 +467,9 @@
       "sqlite3",
       "-batch",
       "-bail",
-      ":memory:",
-      ".read /work/main.sql"
+      "-cmd",
+      ".read /work/main.sql",
+      ":memory:"
     ]
   },
   {
@@ -782,7 +798,9 @@
     "sourceFile": "main.fs",
     "run": [
       "gforth",
-      "/work/main.fs"
+      "/work/main.fs",
+      "-e",
+      "bye"
     ]
   },
   {
@@ -812,7 +830,7 @@
     "sourceFile": "main.jq",
     "run": [
       "jq",
-      "-nr",
+      "-r",
       "-f",
       "/work/main.jq"
     ]
@@ -866,6 +884,270 @@
       "-s",
       "-f",
       "/work/Makefile"
+    ]
+  },
+  {
+    "id": "ruby_script",
+    "name": "Ruby Script",
+    "extensions": [
+      ".rb"
+    ],
+    "category": "Scripting & general-purpose",
+    "paradigm": "Object-oriented",
+    "compiled": false,
+    "sourceFile": "main.rb",
+    "run": [
+      "ruby",
+      "/work/main.rb"
+    ]
+  },
+  {
+    "id": "lisp",
+    "name": "Lisp (SBCL)",
+    "extensions": [
+      ".lisp",
+      ".lsp"
+    ],
+    "category": "Functional & logic",
+    "paradigm": "Multi-paradigm / symbolic",
+    "compiled": false,
+    "sourceFile": "main.lisp",
+    "run": [
+      "sbcl",
+      "--noinform",
+      "--script",
+      "/work/main.lisp"
+    ]
+  },
+  {
+    "id": "swift",
+    "name": "Swift",
+    "extensions": [
+      ".swift"
+    ],
+    "category": "Systems & compiled",
+    "paradigm": "Multi-paradigm",
+    "compiled": true,
+    "sourceFile": "main.swift",
+    "compile": [
+      "swiftc",
+      "/work/main.swift",
+      "-O",
+      "-o",
+      "/exec/program"
+    ],
+    "run": [
+      "/exec/program"
+    ]
+  },
+  {
+    "id": "zig",
+    "name": "Zig",
+    "extensions": [
+      ".zig"
+    ],
+    "category": "Systems & compiled",
+    "paradigm": "Systems / multi-paradigm",
+    "compiled": true,
+    "sourceFile": "main.zig",
+    "compile": [
+      "zig",
+      "build-exe",
+      "/work/main.zig",
+      "-O",
+      "ReleaseFast",
+      "-femit-bin=/exec/program"
+    ],
+    "run": [
+      "/exec/program"
+    ]
+  },
+  {
+    "id": "julia",
+    "name": "Julia",
+    "extensions": [
+      ".jl"
+    ],
+    "category": "Scientific & data",
+    "paradigm": "Numerical / multi-paradigm",
+    "compiled": false,
+    "sourceFile": "main.jl",
+    "run": [
+      "julia",
+      "--startup-file=no",
+      "--history-file=no",
+      "/work/main.jl"
+    ]
+  },
+  {
+    "id": "dart",
+    "name": "Dart",
+    "extensions": [
+      ".dart"
+    ],
+    "category": "Managed & application",
+    "paradigm": "Object-oriented / multi-paradigm",
+    "compiled": false,
+    "sourceFile": "main.dart",
+    "run": [
+      "/exec/program"
+    ],
+    "compile": [
+      "dart",
+      "compile",
+      "exe",
+      "/work/main.dart",
+      "-o",
+      "/exec/program"
+    ]
+  },
+  {
+    "id": "groovy",
+    "name": "Groovy",
+    "extensions": [
+      ".groovy",
+      ".gvy"
+    ],
+    "category": "Managed & JVM",
+    "paradigm": "Dynamic object-oriented",
+    "compiled": false,
+    "sourceFile": "main.groovy",
+    "run": [
+      "groovy",
+      "/work/main.groovy"
+    ]
+  },
+  {
+    "id": "fsharp",
+    "name": "F#",
+    "extensions": [
+      ".fsx",
+      ".fs"
+    ],
+    "category": "Managed & .NET",
+    "paradigm": "Functional-first / multi-paradigm",
+    "compiled": false,
+    "sourceFile": "main.fsx",
+    "run": [
+      "dotnet",
+      "fsi",
+      "--exec",
+      "/work/main.fsx"
+    ]
+  },
+  {
+    "id": "crystal",
+    "name": "Crystal",
+    "extensions": [
+      ".cr"
+    ],
+    "category": "Systems & compiled",
+    "paradigm": "Object-oriented / compiled",
+    "compiled": false,
+    "sourceFile": "main.cr",
+    "run": [
+      "/exec/program"
+    ],
+    "compile": [
+      "crystal",
+      "build",
+      "/work/main.cr",
+      "-o",
+      "/exec/program"
+    ]
+  },
+  {
+    "id": "objectivec",
+    "name": "Objective-C",
+    "extensions": [
+      ".m",
+      ".mm"
+    ],
+    "category": "Managed & compiled",
+    "paradigm": "Object-oriented",
+    "compiled": true,
+    "sourceFile": "main.m",
+    "compile": [
+      "sh",
+      "-lc",
+      "gcc $(gnustep-config --objc-flags) /work/main.m -o /exec/program $(gnustep-config --base-libs)"
+    ],
+    "run": [
+      "/exec/program"
+    ]
+  },
+  {
+    "id": "vbnet",
+    "name": "Visual Basic .NET",
+    "extensions": [
+      ".vb"
+    ],
+    "category": "Managed & .NET",
+    "paradigm": "Object-oriented / multi-paradigm",
+    "compiled": false,
+    "sourceFile": "main.vb",
+    "run": [
+      "dotnet",
+      "/exec/vb/out/Program.dll"
+    ],
+    "compile": [
+      "sh",
+      "-lc",
+      "mkdir -p /exec/vb /tmp/empty-nuget && cp /work/main.vb /exec/vb/Program.vb && printf '%s\\n' '<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>' > /exec/vb/Program.vbproj && dotnet restore /exec/vb/Program.vbproj --source /tmp/empty-nuget --ignore-failed-sources --verbosity quiet && dotnet build --no-restore /exec/vb/Program.vbproj --configuration Release --output /exec/vb/out --verbosity quiet"
+    ]
+  },
+  {
+    "id": "powershell",
+    "name": "PowerShell",
+    "extensions": [
+      ".ps1"
+    ],
+    "category": "Scripting & general-purpose",
+    "paradigm": "Shell / automation",
+    "compiled": false,
+    "sourceFile": "main.ps1",
+    "run": [
+      "pwsh",
+      "-NoLogo",
+      "-NoProfile",
+      "-File",
+      "/work/main.ps1"
+    ]
+  },
+  {
+    "id": "racket",
+    "name": "Racket",
+    "extensions": [
+      ".rkt",
+      ".rktl"
+    ],
+    "category": "Functional & logic",
+    "paradigm": "Multi-paradigm / Lisp-family",
+    "compiled": false,
+    "sourceFile": "main.rkt",
+    "run": [
+      "racket",
+      "/work/main.rkt"
+    ]
+  },
+  {
+    "id": "vlang",
+    "name": "V (Vlang)",
+    "extensions": [
+      ".v"
+    ],
+    "category": "Systems & compiled",
+    "paradigm": "Systems / multi-paradigm",
+    "compiled": true,
+    "sourceFile": "main.v",
+    "compile": [
+      "v",
+      "-o",
+      "/exec/program",
+      "/work/main.v"
+    ],
+    "run": [
+      "/exec/program"
     ]
   }
 ]

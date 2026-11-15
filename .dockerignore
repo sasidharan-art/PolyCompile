@@ -14,3 +14,23 @@ runner/*.bak[0-9]
 runner/*.backup
 runner/language-smoke-results.csv
 *.log
+
+# Build artifacts and editor files
+dist/
+build/
+.cache/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Test output & temporary files
+test-results/
+*.tmp
+*.temp
+
+# Secrets & local config (extra safety belt)
+*.pem
+*.key
+*.crt
+secrets/

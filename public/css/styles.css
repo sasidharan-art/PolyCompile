@@ -1621,9 +1621,10 @@ body.theme-light .detection-pill { background: rgba(238,240,248,0.9); }
   font-size: 0.95rem;
   line-height: 1.6;
   padding: 16px 20px;
+  overflow-x: auto;
   overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
+  white-space: normal;
+  word-break: normal;
   cursor: text;
   border: 1px solid var(--border-subtle);
   border-top: none;
@@ -1713,14 +1714,29 @@ body.theme-light .detection-pill { background: rgba(238,240,248,0.9); }
 
 
 /* Live terminal input row */
-.interactive-terminal-text { display:block; margin:0; min-height:1.5em; white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; color:inherit; }
-.interactive-terminal-input-row { display:flex; align-items:center; gap:9px; width:100%; margin-top:2px; font:inherit; }
+.interactive-terminal-text { display:block; margin:0; min-height:1.5em; white-space:pre; overflow-wrap:normal; font:inherit; color:inherit; max-width:100%; }
+.interactive-terminal-input-row { display:flex; align-items:center; gap:9px; width:100%; margin-top:2px; font:inherit; position:sticky; bottom:0; background:#0d1117; }
 .terminal-prompt { color:#58a6ff; font-weight:700; flex:0 0 auto; }
-.interactive-terminal-input { flex:1; min-width:0; padding:5px 0; border:0; outline:0; background:transparent; color:#2563eb; caret-color:#2563eb; font:inherit; }
+.interactive-terminal-input { flex:1; min-width:0; padding:5px 0; border:0; outline:0; background:transparent; color:#e6edf3; caret-color:#58a6ff; font:inherit; box-shadow:none; }
 .interactive-terminal-input::placeholder { color:#7d8590; opacity:.85; }
 .terminal-send-button { flex:0 0 auto; border:1px solid #30363d; border-radius:5px; padding:4px 10px; background:#21262d; color:#e6edf3; cursor:pointer; font:inherit; font-size:.78em; }
 .terminal-send-button:hover { background:#30363d; }
 .terminal-send-button:disabled,.interactive-terminal-input:disabled { opacity:.45; cursor:not-allowed; }
-.terminal-input-echo { color:#2563eb; }
+.terminal-input-echo { color:#79c0ff; }
 .terminal-system { color:#8b949e; }
 .stderr-chunk { color:#ff7b72; }
+/* Live execution status colours in the integrated terminal. */
+.terminal-success { color: #3fb950; font-weight: 600; }
+.compile-output-chunk { color: #d29922; }
+.run-success { background: #238636 !important; border-color: #2ea043 !important; color: #fff !important; }
+.run-failed { background: #b62324 !important; border-color: #da3633 !important; color: #fff !important; }
+
+
+/* Compiler inspection visualizations */
+.analysis-scope-note { display:flex; align-items:flex-start; gap:8px; padding:8px 12px; color:var(--text-muted); background:var(--bg-secondary); border-bottom:1px solid var(--border-subtle); font-size:.76rem; line-height:1.45; }
+.analysis-scope-note i { color:var(--accent-indigo); margin-top:2px; flex:0 0 auto; }
+.ast-tree-node { margin:5px 0 5px 14px; padding-left:9px; border-left:1px solid var(--border-subtle); }
+.ast-tree-node > summary { cursor:pointer; padding:4px 0; color:var(--text-primary); }
+.ast-node-meta { margin-left:8px; color:var(--text-muted); font: .72rem var(--font-mono); overflow-wrap:anywhere; }
+.ast-visual-container { overflow:auto; max-height:65vh; }
+.cfg-block-code { margin:0; padding:8px 10px; font-family:var(--font-mono); font-size:.72rem; line-height:1.5; color:var(--text-secondary); white-space:pre-wrap; overflow-wrap:anywhere; }

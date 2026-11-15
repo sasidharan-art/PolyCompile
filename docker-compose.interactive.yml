@@ -1,0 +1,23 @@
+services:
+  polycompile-interactive-gateway:
+    build:
+      context: .
+      dockerfile: interactive-runner/Dockerfile
+    image: polycompile-interactive-gateway:latest
+    container_name: polycompile-interactive-gateway
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      PORT: 8080
+      INTERACTIVE_TICKET_SECRET: ${INTERACTIVE_TICKET_SECRET:?Set INTERACTIVE_TICKET_SECRET in the host environment}
+      EXECUTION_IMAGE: polycompile-exec:latest
+      MAX_SESSIONS: 2
+      MAX_OUTPUT_BYTES: 1000000
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 3

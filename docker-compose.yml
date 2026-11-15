@@ -1,6 +1,39 @@
-version: '3.8'
-
 services:
+  # Build this image once before starting the web app and gateway:
+  # docker compose build polycompile-exec-image
+  polycompile-exec-image:
+    image: polycompile-exec:latest
+    build:
+      context: .
+      dockerfile: runner/Dockerfile
+    profiles: ["build-only"]
+
+  # The gateway must run on a Docker host with access to the host Docker socket.
+  # The browser connects to the public URL configured below, not to a container DNS name.
+  polycompile-interactive-gateway:
+    build:
+      context: .
+      dockerfile: interactive-runner/Dockerfile
+    image: polycompile-interactive-gateway:latest
+    container_name: polycompile-interactive-gateway
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      PORT: 8080
+      INTERACTIVE_TICKET_SECRET: ${INTERACTIVE_TICKET_SECRET:?Set INTERACTIVE_TICKET_SECRET in .env}
+      EXECUTION_IMAGE: polycompile-exec:latest
+      MAX_SESSIONS: ${MAX_INTERACTIVE_SESSIONS:-4}
+      MAX_OUTPUT_BYTES: 1000000
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
   polycompile:
     build:
       context: .
@@ -11,15 +44,22 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NODE_ENV=production
-      - PORT=3000
+      NODE_ENV: production
+      PORT: 3000
+      # This URL is returned to the user's browser. For local use, localhost is correct.
+      # For remote use, replace it with the public wss:// URL behind a TLS reverse proxy.
+      INTERACTIVE_GATEWAY_URL: ${INTERACTIVE_GATEWAY_URL:-ws://localhost:8080/session}
+      INTERACTIVE_TICKET_SECRET: ${INTERACTIVE_TICKET_SECRET:?Set INTERACTIVE_TICKET_SECRET in .env}
+      JUDGE0_URL: ${JUDGE0_URL:-https://ce.judge0.com}
+      JUDGE0_KEY: ${JUDGE0_KEY:-}
+      JUDGE0_RAPIDAPI_HOST: ${JUDGE0_RAPIDAPI_HOST:-}
+      PISTON_URL: ${PISTON_URL:-}
+      PISTON_KEY: ${PISTON_KEY:-}
+    depends_on:
+      polycompile-interactive-gateway:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 1024M

@@ -49,10 +49,16 @@ app.get(['/health', '/api/health'], (req, res) => {
 
 // Interactive terminal ticket endpoint (signed tickets for the separate Docker gateway)
 app.post('/api/interactive-ticket', (req, res) => {
-  const secret = process.env.INTERACTIVE_TICKET_SECRET;
-  const gatewayUrl = process.env.INTERACTIVE_GATEWAY_URL;
+  const localDevMode = process.env.LOCAL_DEV_MODE === 'true';
+  if (localDevMode) {
+    console.warn('[PolyCompile] ⚠  LOCAL_DEV_MODE=true — using unsandboxed local execution gateway. NEVER use in production.');
+  }
+  const secret = localDevMode
+    ? (process.env.INTERACTIVE_TICKET_SECRET || 'local-dev-only-not-for-production-use-32chars')
+    : process.env.INTERACTIVE_TICKET_SECRET;
+  const gatewayUrl = process.env.INTERACTIVE_GATEWAY_URL || (localDevMode ? 'ws://localhost:8081' : null);
 
-  if (!secret || !gatewayUrl) {
+  if (!localDevMode && (!secret || secret.length < 32 || !gatewayUrl)) {
     return res.status(503).json({
       success: false,
       error: 'Interactive execution gateway is not configured.',
@@ -68,6 +74,7 @@ app.post('/api/interactive-ticket', (req, res) => {
   }
   const payload = Buffer.from(JSON.stringify({ scope: 'interactive-run', exp: Date.now() + 60_000, nonce: crypto.randomBytes(16).toString('hex') })).toString('base64url');
   const signature = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+  res.set('Cache-Control', 'no-store');
   return res.json({ success: true, ticket: `${payload}.${signature}`, gatewayUrl: parsedGateway.toString() });
 });
 
@@ -109,8 +116,17 @@ app.post('/api/detect', (req, res) => {
 // 4. Compiler Phases Introspection (Lexical, Syntax, Semantic, IR, Optimization)
 app.post('/api/compile-phases', (req, res) => {
   try {
-    const { sourceCode, languageId } = req.body;
-    const code = sourceCode || '';
+    const { sourceCode, languageId } = req.body || {};
+    if (typeof sourceCode !== 'string' || !sourceCode.trim()) {
+      return res.status(400).json({ success: false, userMessage: 'Enter source code before inspecting compiler phases.' });
+    }
+    if (Buffer.byteLength(sourceCode, 'utf8') > 1_000_000) {
+      return res.status(413).json({ success: false, userMessage: 'Source code exceeds the 1 MB analysis limit.' });
+    }
+    if (languageId && languageId !== 'auto' && !getLanguageById(languageId)) {
+      return res.status(400).json({ success: false, userMessage: 'Select a supported language before inspecting phases.' });
+    }
+    const code = sourceCode;
 
     // Step 0: Language Identification
     let lang = languageId ? getLanguageById(languageId) : null;
@@ -186,9 +202,10 @@ app.post('/api/compile-phases', (req, res) => {
       }
     });
   } catch (err) {
+    console.error('[PolyCompile:compile-phases]', err && err.message ? err.message : 'Unknown analysis failure');
     res.status(500).json({
       success: false,
-      error: err.message
+      userMessage: 'Unable to analyze this source code. Check the selected language and try again.'
     });
   }
 });
