@@ -111,6 +111,9 @@ document.addEventListener('DOMContentLoaded', () => {
         allSnippets = snipRes.snippets;
         populateSnippetsDropdown(snipRes.snippets);
         if (allSnippets.length > 0) loadSnippet(allSnippets[0].id);
+        else inspectPhases({ switchTabToPhases: false, silent: true });
+      } else {
+        inspectPhases({ switchTabToPhases: false, silent: true });
       }
 
       await checkServerHealth();
@@ -151,6 +154,119 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function downloadCode() {
+    const code = codeEditor.value;
+    if (!code) {
+      showToast('No code to download.', 'warning');
+      return;
+    }
+    const selectedId = languageSelect.value;
+    const lang = allLanguages.find(l => l.id === selectedId);
+    const ext = lang ? (lang.extension || (Array.isArray(lang.extensions) ? lang.extensions[0] : '.txt')) : '.txt';
+    const langTag = selectedId === 'auto' ? (currentDetection?.detected?.id || 'code') : (selectedId || 'code');
+    const filename = `polycompile-${langTag}${ext.startsWith('.') ? ext : '.' + ext}`;
+    const blob = new Blob([code], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`Saved as ${filename}`, 'success');
+  }
+
+  function openShortcutsModal() {
+    if (shortcutsModal) shortcutsModal.classList.add('open');
+  }
+  function closeShortcutsModal() {
+    if (shortcutsModal) shortcutsModal.classList.remove('open');
+  }
+  if (keyboardShortcutsBtn) keyboardShortcutsBtn.addEventListener('click', openShortcutsModal);
+  if (closeShortcutsBtn) closeShortcutsBtn.addEventListener('click', closeShortcutsModal);
+  if (shortcutsModal) {
+    shortcutsModal.addEventListener('click', e => {
+      if (e.target === shortcutsModal) closeShortcutsModal();
+    });
+  }
+
+  function openEvidenceModal() {
+    if (!evidenceModal) return;
+    const summary = document.getElementById('evidenceSummary');
+    const candidates = document.getElementById('candidatesList');
+    const reasoning = document.getElementById('reasoningList');
+
+    if (currentDetection) {
+      if (summary) {
+        summary.innerHTML = `Identified <strong>${currentDetection.detected?.name || 'Unknown'}</strong> with <strong>${currentDetection.confidence || 0}%</strong> confidence. Paradigm: <em>${currentDetection.paradigm || 'N/A'}</em>.`;
+      }
+      if (candidates) {
+        candidates.replaceChildren();
+        const list = currentDetection.allCandidates || (currentDetection.detected ? [{ name: currentDetection.detected.name, confidence: currentDetection.confidence }] : []);
+        list.forEach(c => {
+          const item = document.createElement('div');
+          item.className = 'candidate-card';
+          item.innerHTML = `<span class="candidate-name">${c.name || c.id}</span><span class="candidate-score">${c.confidence || c.score || 0}%</span>`;
+          candidates.appendChild(item);
+        });
+      }
+      if (reasoning) {
+        reasoning.replaceChildren();
+        const rules = currentDetection.matchedRules || currentDetection.features || currentDetection.reasons || ['Syntax and signature pattern match'];
+        rules.forEach(r => {
+          const li = document.createElement('li');
+          li.textContent = typeof r === 'string' ? r : (r.rule || r.feature || JSON.stringify(r));
+          reasoning.appendChild(li);
+        });
+      }
+    } else {
+      if (summary) summary.textContent = 'Type code in the editor to trigger automatic language detection.';
+      if (candidates) candidates.replaceChildren();
+      if (reasoning) reasoning.replaceChildren();
+    }
+    evidenceModal.classList.add('open');
+  }
+  function closeEvidenceModal() {
+    if (evidenceModal) evidenceModal.classList.remove('open');
+  }
+  if (detectionInfoBtn) detectionInfoBtn.addEventListener('click', openEvidenceModal);
+  if (closeEvidenceBtn) closeEvidenceBtn.addEventListener('click', closeEvidenceModal);
+  if (evidenceModal) {
+    evidenceModal.addEventListener('click', e => {
+      if (e.target === evidenceModal) closeEvidenceModal();
+    });
+  }
+
+  if (downloadBtn) downloadBtn.addEventListener('click', downloadCode);
+  if (copyCodeBtn) {
+    copyCodeBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(codeEditor.value);
+        showToast('Code copied to clipboard.', 'success');
+      } catch {
+        showToast('Unable to copy code.', 'error');
+      }
+    });
+  }
+  if (fileUploadInput) {
+    fileUploadInput.addEventListener('change', e => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        codeEditor.value = ev.target.result;
+        UI.syncLineNumbers(codeEditor, lineNumbers);
+        updateFileInfo();
+        scheduleAutoDetection();
+        inspectPhases({ switchTabToPhases: false, silent: true });
+        showToast(`Loaded ${file.name}`, 'success');
+      };
+      reader.readAsText(file);
+      fileUploadInput.value = '';
+    });
+  }
+
   function loadSnippet(snippetId) {
     const snip = allSnippets.find(s => s.id === snippetId);
     if (!snip) return;
@@ -158,6 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
     UI.syncLineNumbers(codeEditor, lineNumbers);
     updateFileInfo();
     triggerAutoDetection(snip.code);
+    inspectPhases({ switchTabToPhases: false, silent: true });
   }
 
   codeEditor.addEventListener('input', () => {
@@ -170,31 +287,89 @@ document.addEventListener('DOMContentLoaded', () => {
     lineNumbers.scrollTop = codeEditor.scrollTop;
   });
 
-  codeEditor.addEventListener('keydown', (e) => {
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      const start = codeEditor.selectionStart;
-      const end   = codeEditor.selectionEnd;
-      codeEditor.value = codeEditor.value.substring(0, start) + '    ' + codeEditor.value.substring(end);
-      codeEditor.selectionStart = codeEditor.selectionEnd = start + 4;
-      UI.syncLineNumbers(codeEditor, lineNumbers);
-      updateFileInfo();
+  // Global Keyboard Shortcuts (Runs from anywhere on the page)
+  window.addEventListener('keydown', e => {
+    const isCtrlOrMeta = e.ctrlKey || e.metaKey;
+    const key = e.key;
+
+    // Escape closes modals
+    if (key === 'Escape') {
+      closeShortcutsModal();
+      closeEvidenceModal();
+      return;
     }
-    else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+
+    // Ctrl+Enter or Cmd+Enter -> Run Code
+    if (isCtrlOrMeta && key === 'Enter') {
       e.preventDefault();
       runCode();
+      return;
     }
-    else if (e.key === '/' && (e.ctrlKey || e.metaKey)) {
+
+    // Ctrl+/ or Cmd+/ -> Inspect Compiler Phases
+    if (isCtrlOrMeta && key === '/') {
       e.preventDefault();
-      inspectPhases();
+      inspectPhases({ switchTabToPhases: true, silent: false });
+      return;
     }
-    else if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      downloadCode();
-    }
-    else if (e.key === 'l' && (e.ctrlKey || e.metaKey)) {
+
+    // Ctrl+L or Cmd+L -> Clear Console
+    if (isCtrlOrMeta && (key === 'l' || key === 'L')) {
       e.preventDefault();
       clearConsole();
+      return;
+    }
+
+    // Ctrl+S or Cmd+S -> Download Code
+    if (isCtrlOrMeta && (key === 's' || key === 'S')) {
+      e.preventDefault();
+      downloadCode();
+      return;
+    }
+
+    // F1 or Ctrl+K -> Toggle Shortcuts Modal
+    if (key === 'F1' || (isCtrlOrMeta && (key === 'k' || key === 'K'))) {
+      e.preventDefault();
+      if (shortcutsModal?.classList.contains('open')) closeShortcutsModal();
+      else openShortcutsModal();
+      return;
+    }
+
+    // '?' opens shortcuts modal when not in an active input/textarea
+    if (key === '?' && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+      e.preventDefault();
+      openShortcutsModal();
+      return;
+    }
+
+    // Editor-specific shortcuts
+    if (document.activeElement === codeEditor) {
+      if (key === 'Tab') {
+        e.preventDefault();
+        const start = codeEditor.selectionStart;
+        const end   = codeEditor.selectionEnd;
+        codeEditor.value = codeEditor.value.substring(0, start) + '    ' + codeEditor.value.substring(end);
+        codeEditor.selectionStart = codeEditor.selectionEnd = start + 4;
+        UI.syncLineNumbers(codeEditor, lineNumbers);
+        updateFileInfo();
+        return;
+      }
+      if (isCtrlOrMeta && (key === 'd' || key === 'D')) {
+        e.preventDefault();
+        const start = codeEditor.selectionStart;
+        const end   = codeEditor.selectionEnd;
+        const val   = codeEditor.value;
+        const lineStart = val.lastIndexOf('\n', start - 1) + 1;
+        let lineEnd = val.indexOf('\n', end);
+        if (lineEnd === -1) lineEnd = val.length;
+        const line = val.substring(lineStart, lineEnd);
+        codeEditor.value = val.substring(0, lineEnd) + '\n' + line + val.substring(lineEnd);
+        codeEditor.selectionStart = codeEditor.selectionEnd = end + line.length + 1;
+        UI.syncLineNumbers(codeEditor, lineNumbers);
+        updateFileInfo();
+        scheduleAutoDetection();
+        return;
+      }
     }
   });
 
@@ -226,9 +401,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function scheduleAutoDetection() {
-    if (languageSelect.value !== 'auto') return;
     clearTimeout(detectTimeout);
-    detectTimeout = setTimeout(() => triggerAutoDetection(codeEditor.value), 350);
+    detectTimeout = setTimeout(() => {
+      if (languageSelect.value === 'auto') {
+        triggerAutoDetection(codeEditor.value);
+      }
+      inspectPhases({ switchTabToPhases: false, silent: true });
+    }, 450);
   }
 
   async function triggerAutoDetection(sourceCode) {
@@ -559,6 +738,7 @@ document.addEventListener('DOMContentLoaded', () => {
     switchTab('consoleTab');
     resetTerminal();
     currentCode = sourceCode;
+    inspectPhases({ switchTabToPhases: false, silent: true });
     runBtn.classList.remove('run-success', 'run-failed');
     currentLang = languageSelect.value;
     currentAbortCtrl = new AbortController();
@@ -753,25 +933,24 @@ document.addEventListener('DOMContentLoaded', () => {
   ========================================================= */
   let lastPhaseTokens = [];
   let activeTokenFilter = 'ALL';
+  let hasInspectedPhases = false;
 
-  async function inspectPhases() {
+  async function inspectPhases(opts = {}) {
+    const { switchTabToPhases = true, silent = false } = opts;
     const sourceCode = codeEditor.value;
     const selectedLang = languageSelect.value;
     if (!sourceCode.trim()) {
-      showToast('Enter code before inspecting compiler phases.', 'warning');
-      return;
-    }
-    if (isRunning) {
-      showToast('Wait for the current operation to finish.', 'warning');
+      if (!silent) showToast('Enter code before inspecting compiler phases.', 'warning');
       return;
     }
 
-    if (window.innerWidth <= 900) setResponsiveView('output');
-    if (statusText) statusText.textContent = 'Analyzing';
-    inspectPhasesBtn.disabled = true;
-    inspectPhasesBtn.classList.add('is-loading');
-    const originalLabel = inspectPhasesBtn.querySelector('span')?.textContent || 'Inspect Phases';
-    if (inspectPhasesBtn.querySelector('span')) inspectPhasesBtn.querySelector('span').textContent = 'Analyzing…';
+    if (window.innerWidth <= 900 && switchTabToPhases) setResponsiveView('output');
+    if (!silent && statusText) statusText.textContent = 'Analyzing';
+    if (!silent && inspectPhasesBtn) {
+      inspectPhasesBtn.disabled = true;
+      inspectPhasesBtn.classList.add('is-loading');
+      if (inspectPhasesBtn.querySelector('span')) inspectPhasesBtn.querySelector('span').textContent = 'Analyzing…';
+    }
 
     try {
       const res = await fetch('/api/compile-phases', {
@@ -781,19 +960,29 @@ document.addEventListener('DOMContentLoaded', () => {
         signal: AbortSignal.timeout(30000)
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) throw new Error(data.userMessage || data.error || `Analysis failed (${res.status}).`);
+      if (!res.ok || !data.success) {
+        if (!silent) throw new Error(data.userMessage || data.error || `Analysis failed (${res.status}).`);
+        return;
+      }
       populateCompilerPhases(data.phases);
-      switchTab('lexicalTab');
-      if (statusText) statusText.textContent = 'Analysis complete';
-      showToast('Compiler phases inspected successfully.', 'success');
+      hasInspectedPhases = true;
+      if (switchTabToPhases) switchTab('lexicalTab');
+      if (!silent) {
+        if (statusText) statusText.textContent = 'Analysis complete';
+        showToast('Compiler phases inspected successfully.', 'success');
+      }
     } catch (error) {
-      const message = error.name === 'TimeoutError' ? 'Compiler phase analysis timed out.' : (error.message || 'Unable to inspect compiler phases.');
-      showToast(message, 'error');
-      if (statusText) statusText.textContent = 'Analysis failed';
+      if (!silent) {
+        const message = error.name === 'TimeoutError' ? 'Compiler phase analysis timed out.' : (error.message || 'Unable to inspect compiler phases.');
+        showToast(message, 'error');
+        if (statusText) statusText.textContent = 'Analysis failed';
+      }
     } finally {
-      inspectPhasesBtn.disabled = false;
-      inspectPhasesBtn.classList.remove('is-loading');
-      if (inspectPhasesBtn.querySelector('span')) inspectPhasesBtn.querySelector('span').textContent = originalLabel;
+      if (!silent && inspectPhasesBtn) {
+        inspectPhasesBtn.disabled = false;
+        inspectPhasesBtn.classList.remove('is-loading');
+        if (inspectPhasesBtn.querySelector('span')) inspectPhasesBtn.querySelector('span').textContent = 'Inspect Phases';
+      }
     }
   }
 
@@ -1017,6 +1206,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function switchTab(tabId) {
     tabButtons.forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
     tabPanes.forEach(p => p.classList.toggle('active', p.id === tabId));
+    if (tabId !== 'consoleTab' && !hasInspectedPhases) {
+      inspectPhases({ switchTabToPhases: false, silent: true });
+    }
   }
 
   subTabButtons.forEach(btn => {
@@ -1082,7 +1274,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.classList.toggle('theme-light');
   });
 
-  languageSelect.addEventListener('change', () => updateFileInfo());
+  languageSelect.addEventListener('change', () => {
+    updateFileInfo();
+    inspectPhases({ switchTabToPhases: false, silent: true });
+  });
 
   const viewBtnEditor = document.getElementById('viewBtnEditor');
   const viewBtnOutput = document.getElementById('viewBtnOutput');
@@ -1102,7 +1297,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (viewBtnSplit)  viewBtnSplit.addEventListener('click',  () => setResponsiveView('split'));
 
   runBtn.addEventListener('click', runCode);
-  if (inspectPhasesBtn) inspectPhasesBtn.addEventListener('click', inspectPhases);
+  if (inspectPhasesBtn) inspectPhasesBtn.addEventListener('click', () => inspectPhases({ switchTabToPhases: true, silent: false }));
 
   UI.syncLineNumbers(codeEditor, lineNumbers);
   updateFileInfo();
