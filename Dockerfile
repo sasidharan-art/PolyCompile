@@ -5,8 +5,8 @@
 
 FROM node:20-alpine AS base
 
-# Install security updates
-RUN apk --no-cache add curl
+# Install security updates and common toolchains for cloud deployment
+RUN apk --no-cache add curl python3 py3-pip gcc g++ musl-dev make bash
 
 WORKDIR /app
 
