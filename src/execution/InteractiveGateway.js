@@ -11,6 +11,7 @@ const path = require('node:path');
 const os = require('node:os');
 const crypto = require('node:crypto');
 const ExecutionManager = require('./ExecutionManager');
+const { sanitizeSourceCode } = require('../utils/codeSanitizer');
 
 const registryPath = path.join(__dirname, '..', '..', 'runner', 'languages.json');
 let registry = [];
@@ -162,7 +163,7 @@ function setupInteractiveGateway(server) {
           return;
         }
 
-        sourceCode = typeof msg.sourceCode === 'string' ? msg.sourceCode : '';
+        sourceCode = sanitizeSourceCode(typeof msg.sourceCode === 'string' ? msg.sourceCode : '');
         if ((msg.languageId === 'javascript' || msg.languageId === 'typescript') && sourceCode.includes('prompt(') && !sourceCode.includes('globalThis.prompt')) {
           sourceCode = `if (typeof globalThis.prompt !== 'function') {\n  const _fs = require('node:fs');\n  globalThis.prompt = function(msg = '') {\n    if (msg) process.stdout.write(String(msg));\n    const buf = Buffer.alloc(1);\n    const chunks = [];\n    while (true) {\n      let n = 0;\n      try { n = _fs.readSync(0, buf, 0, 1, null); } catch (e) { if (e && e.code === 'EINTR') continue; break; }\n      if (n === 0) break;\n      if (buf[0] === 0x0a) break;\n      if (buf[0] !== 0x0d) chunks.push(Buffer.from(buf.subarray(0, n)));\n    }\n    return chunks.length ? Buffer.concat(chunks).toString('utf8') : '';\n  };\n}\n` + sourceCode;
         }

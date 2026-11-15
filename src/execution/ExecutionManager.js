@@ -8,6 +8,7 @@
 
 const LocalEngines = require('./LocalEngines');
 const SandboxClient = require('./SandboxClient');
+const { sanitizeSourceCode } = require('../utils/codeSanitizer');
 
 class ExecutionManager {
   /**
@@ -20,6 +21,7 @@ class ExecutionManager {
    * @returns {Promise<Object>} Execution report
    */
   static async execute({ language, sourceCode, stdin = '', preferLocal = false }) {
+    sourceCode = sanitizeSourceCode(sourceCode);
     const langId = (language.id || '').toLowerCase();
 
     // Brainfuck has a native 30,000-cell tape VM that runs instantly in-process

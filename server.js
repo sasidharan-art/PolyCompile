@@ -27,6 +27,7 @@ const DiagnosticEngine = require('./src/compiler/DiagnosticEngine');
 const ExecutionManager = require('./src/execution/ExecutionManager');
 const { setupInteractiveGateway } = require('./src/execution/InteractiveGateway');
 const { SNIPPETS, getAllSnippets } = require('./src/snippets/CodeSnippets');
+const { sanitizeSourceCode } = require('./src/utils/codeSanitizer');
 
 const app = express();
 const server = http.createServer(app);
@@ -127,7 +128,7 @@ app.post('/api/compile-phases', (req, res) => {
     if (languageId && languageId !== 'auto' && !getLanguageById(languageId)) {
       return res.status(400).json({ success: false, userMessage: 'Select a supported language before inspecting phases.' });
     }
-    const code = sourceCode;
+    const code = sanitizeSourceCode(sourceCode);
 
     // Step 0: Language Identification
     let lang = languageId ? getLanguageById(languageId) : null;
@@ -234,7 +235,7 @@ app.post('/api/execute', async (req, res) => {
     if (Buffer.byteLength(sourceCode, 'utf8') > 1000000) {
       return res.status(413).json({ success: false, error: 'Source code exceeds the 1 MB execution limit.' });
     }
-    const code = sourceCode;
+    const code = sanitizeSourceCode(sourceCode);
 
     // Step 0: Language Identification
     let lang = languageId ? getLanguageById(languageId) : null;

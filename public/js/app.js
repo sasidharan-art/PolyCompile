@@ -267,6 +267,56 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function sanitizeSourceCode(raw) {
+    if (raw == null) return '';
+    let code = String(raw);
+    code = code
+      .replace(/<br\s*\/?>\r?\n?/gi, '\n')
+      .replace(/<\/br>\r?\n?/gi, '\n')
+      .replace(/<\/p>\r?\n?/gi, '\n')
+      .replace(/<p[^>]*>/gi, '')
+      .replace(/<\/div>\r?\n?/gi, '\n')
+      .replace(/<div[^>]*>/gi, '')
+      .replace(/&amp;gt;/gi, '&gt;')
+      .replace(/&amp;lt;/gi, '&lt;')
+      .replace(/&amp;quot;/gi, '&quot;')
+      .replace(/&amp;apos;/gi, '&apos;')
+      .replace(/&amp;#39;/gi, '&#39;')
+      .replace(/&amp;amp;/gi, '&amp;')
+      .replace(/&gt;/gi, '>')
+      .replace(/&lt;/gi, '<')
+      .replace(/&quot;/gi, '"')
+      .replace(/&apos;/gi, "'")
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&#0*62;/g, '>')
+      .replace(/&#0*60;/g, '<')
+      .replace(/&#0*34;/g, '"')
+      .replace(/&#0*39;/g, "'")
+      .replace(/&#0*38;/g, '&')
+      .replace(/&#0*160;/g, ' ');
+    code = code.replace(/&#(\d+);/g, (match, dec) => {
+      const num = parseInt(dec, 10);
+      return num >= 32 && num <= 126 ? String.fromCharCode(num) : match;
+    });
+    code = code.replace(/&#x([0-9a-fA-F]+);/g, (match, hex) => {
+      const num = parseInt(hex, 16);
+      return num >= 32 && num <= 126 ? String.fromCharCode(num) : match;
+    });
+    code = code.replace(/&amp;/gi, '&');
+
+    // Auto-heal fused lines if browser stripped <node> tags in Dijkstra/Graph codes
+    if (/distcontinue/i.test(code)) {
+      code = code.replace(/if\s+current_dist\s*>\s*distcontinue/gi, 'if current_dist > dist[node]:\n        continue');
+    }
+    if (/graphnew_dist/i.test(code)) {
+      code = code.replace(/for\s+neighbor,\s*weight\s+in\s+graphnew_dist\s*=\s*current_dist\s*\+\s*weight/gi, 'for neighbor, weight in graph[node]:\n        new_dist = current_dist + weight');
+    }
+    if (/distdist\[neighbor\]/i.test(code)) {
+      code = code.replace(/if\s+new_dist\s*<\s*distdist\[neighbor\]\s*=\s*new_dist/gi, 'if new_dist < dist[neighbor]:\n            dist[neighbor] = new_dist');
+    }
+    return code;
+  }
+
   function loadSnippet(snippetId) {
     const snip = allSnippets.find(s => s.id === snippetId);
     if (!snip) return;
@@ -276,6 +326,22 @@ document.addEventListener('DOMContentLoaded', () => {
     triggerAutoDetection(snip.code);
     inspectPhases({ switchTabToPhases: false, silent: true });
   }
+
+  codeEditor.addEventListener('paste', e => {
+    const text = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+    if (text && (/&(?:gt|lt|quot|amp|#0*39|apos|nbsp);/i.test(text) || /<br\s*\/?>/i.test(text) || /distcontinue|graphnew_dist|distdist\[/i.test(text))) {
+      e.preventDefault();
+      const clean = sanitizeSourceCode(text);
+      const start = codeEditor.selectionStart;
+      const end = codeEditor.selectionEnd;
+      codeEditor.value = codeEditor.value.substring(0, start) + clean + codeEditor.value.substring(end);
+      codeEditor.selectionStart = codeEditor.selectionEnd = start + clean.length;
+      UI.syncLineNumbers(codeEditor, lineNumbers);
+      updateFileInfo();
+      scheduleAutoDetection();
+      showToast('Cleaned HTML entities & formatted source code.', 'info');
+    }
+  });
 
   codeEditor.addEventListener('input', () => {
     UI.syncLineNumbers(codeEditor, lineNumbers);
@@ -747,7 +813,12 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const sourceCode = codeEditor.value;
+    let sourceCode = sanitizeSourceCode(codeEditor.value);
+    if (sourceCode !== codeEditor.value) {
+      codeEditor.value = sourceCode;
+      UI.syncLineNumbers(codeEditor, lineNumbers);
+      updateFileInfo();
+    }
     if (!sourceCode.trim()) {
       showToast('Please enter source code first.', 'warning');
       return;
@@ -957,7 +1028,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function inspectPhases(opts = {}) {
     const { switchTabToPhases = true, silent = false } = opts;
-    const sourceCode = codeEditor.value;
+    let sourceCode = sanitizeSourceCode(codeEditor.value);
+    if (sourceCode !== codeEditor.value) {
+      codeEditor.value = sourceCode;
+      UI.syncLineNumbers(codeEditor, lineNumbers);
+      updateFileInfo();
+    }
     const selectedLang = languageSelect.value;
     if (!sourceCode.trim()) {
       if (!silent) showToast('Enter code before inspecting compiler phases.', 'warning');

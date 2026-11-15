@@ -1,6 +1,7 @@
 
 
 const { LANGUAGES, getAllLanguages, PARADIGMS } = require('./LanguageRegistry');
+const { sanitizeSourceCode } = require('../utils/codeSanitizer');
 
 class LanguageDetector {
   /**
@@ -9,6 +10,7 @@ class LanguageDetector {
    * @returns {Object} Detection result containing language id, confidence, paradigm, candidates, and reasoning
    */
   static detect(sourceCode) {
+    sourceCode = sanitizeSourceCode(sourceCode);
     if (!sourceCode || typeof sourceCode !== 'string' || sourceCode.trim().length === 0) {
       return {
         detected: LANGUAGES.c,

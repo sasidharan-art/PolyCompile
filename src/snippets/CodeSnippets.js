@@ -398,6 +398,53 @@ if __name__ == '__main__':
     print(f"Geometric Prime Sum: {sum(primes_under_50)}")`
   },
   {
+    id: 'python-dijkstra',
+    languageId: 'python',
+    paradigm: 'Dynamic / Scripting',
+    title: "Python: Dijkstra's Shortest Path Algorithm",
+    code: `import heapq
+
+def dijkstra():
+    print("--- PolyCompile: Dijkstra's Algorithm ---")
+    n = int(input("Enter number of vertices: "))
+    m = int(input("Enter number of edges: "))
+
+    graph = [[] for _ in range(n)]
+
+    print("Enter edges (source destination weight):")
+    for _ in range(m):
+        u, v, w = map(int, input().split())
+        graph[u].append((v, w))
+        graph[v].append((u, w))
+
+    start = int(input("Enter starting vertex: "))
+
+    dist = [float('inf')] * n
+    dist[start] = 0
+
+    pq = [(0, start)]
+
+    while pq:
+        current_dist, node = heapq.heappop(pq)
+
+        if current_dist > dist[node]:
+            continue
+
+        for neighbor, weight in graph[node]:
+            new_dist = current_dist + weight
+
+            if new_dist < dist[neighbor]:
+                dist[neighbor] = new_dist
+                heapq.heappush(pq, (new_dist, neighbor))
+
+    print(f"\\nShortest distances from vertex {start}:")
+    for i in range(n):
+        print(f"Vertex {i} -> {dist[i]}")
+
+if __name__ == '__main__':
+    dijkstra()`
+  },
+  {
     id: 'javascript-async',
     languageId: 'javascript',
     paradigm: 'Dynamic / Scripting',
