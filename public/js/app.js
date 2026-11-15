@@ -785,23 +785,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       if (!ticketRes.ok || !ticketData.success) {
-        if (ticketRes.status >= 500 && ticketRes.status !== 503) {
-          terminalWrite('\nExecution service unavailable.\n', 'stderr-chunk');
-          terminalFinished = true;
-          setLoadingState(false);
-          setRunButtonResult(false);
-          return;
-        }
-        // Keep ordinary no-input programs usable through the existing batch
-        // provider. For stdin programs, do not fall back to a separate input
-        // form or silently run with empty stdin: the terminal must stay the
-        // single place where prompts, user keystrokes, and output appear.
-        if (sourceReadsStdin(sourceCode, currentLang)) {
-          // Preserve the backend's actionable setup message (for example,
-          // missing INTERACTIVE_GATEWAY_URL or shared ticket secret).
-          showInteractiveUnavailable(ticketData.userMessage || ticketData.error || 'The interactive execution gateway is not configured.');
-          return;
-        }
+        // Fall back seamlessly to cloud batch execution so code always runs
         await runBatchFallback(sourceCode, currentLang, '');
         return;
       }

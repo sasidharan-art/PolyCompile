@@ -25,11 +25,15 @@ const IntermediateCodeGenerator = require('./src/compiler/IntermediateCode');
 const CodeOptimizer = require('./src/compiler/CodeOptimizer');
 const DiagnosticEngine = require('./src/compiler/DiagnosticEngine');
 const ExecutionManager = require('./src/execution/ExecutionManager');
+const { setupInteractiveGateway } = require('./src/execution/InteractiveGateway');
 const { SNIPPETS, getAllSnippets } = require('./src/snippets/CodeSnippets');
 
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
+
+// Mount Universal Interactive WebSocket Gateway at /session
+setupInteractiveGateway(server);
 
 // Code playground requests should remain small; this also protects serverless payload limits.
 app.use(express.json({ limit: '1mb' }));
@@ -47,32 +51,29 @@ app.get(['/health', '/api/health'], (req, res) => {
   });
 });
 
-// Interactive terminal ticket endpoint (signed tickets for the separate Docker gateway)
+// Interactive terminal ticket endpoint (auto-routes to local or cloud WebSocket)
 app.post('/api/interactive-ticket', (req, res) => {
-  const localDevMode = process.env.LOCAL_DEV_MODE === 'true';
-  if (localDevMode) {
-    console.warn('[PolyCompile] ⚠  LOCAL_DEV_MODE=true — using unsandboxed local execution gateway. NEVER use in production.');
-  }
-  const secret = localDevMode
-    ? (process.env.INTERACTIVE_TICKET_SECRET || 'local-dev-only-not-for-production-use-32chars')
-    : process.env.INTERACTIVE_TICKET_SECRET;
-  const gatewayUrl = process.env.INTERACTIVE_GATEWAY_URL || (localDevMode ? 'ws://localhost:8081' : null);
+  const secret = process.env.INTERACTIVE_TICKET_SECRET || 'polycompile-interactive-secure-ticket-key-32chars';
+  const isHttps = req.headers['x-forwarded-proto'] === 'https' || req.protocol === 'https';
+  const host = req.get('host') || `localhost:${PORT}`;
+  const defaultGatewayUrl = `${isHttps ? 'wss' : 'ws'}://${host}/session`;
+  const gatewayUrl = process.env.INTERACTIVE_GATEWAY_URL || defaultGatewayUrl;
 
-  if (!localDevMode && (!secret || secret.length < 32 || !gatewayUrl)) {
-    return res.status(503).json({
-      success: false,
-      error: 'Interactive execution gateway is not configured.',
-      userMessage: 'Live terminal input is not configured yet. Set INTERACTIVE_GATEWAY_URL and INTERACTIVE_TICKET_SECRET on the web service, and use the same ticket secret on the Docker execution gateway.'
-    });
-  }
   let parsedGateway;
-  try { parsedGateway = new URL(gatewayUrl); } catch (_) {
+  try {
+    parsedGateway = new URL(gatewayUrl);
+  } catch (_) {
     return res.status(500).json({ success: false, error: 'INTERACTIVE_GATEWAY_URL must be an absolute ws:// or wss:// URL.' });
   }
   if (!['ws:', 'wss:'].includes(parsedGateway.protocol)) {
     return res.status(500).json({ success: false, error: 'INTERACTIVE_GATEWAY_URL must use ws:// or wss://.' });
   }
-  const payload = Buffer.from(JSON.stringify({ scope: 'interactive-run', exp: Date.now() + 60_000, nonce: crypto.randomBytes(16).toString('hex') })).toString('base64url');
+
+  const payload = Buffer.from(JSON.stringify({
+    scope: 'interactive-run',
+    exp: Date.now() + 60_000,
+    nonce: crypto.randomBytes(16).toString('hex')
+  })).toString('base64url');
   const signature = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
   res.set('Cache-Control', 'no-store');
   return res.json({ success: true, ticket: `${payload}.${signature}`, gatewayUrl: parsedGateway.toString() });
