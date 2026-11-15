@@ -522,14 +522,33 @@ document.addEventListener('DOMContentLoaded', () => {
     terminalInput = input;
     consoleOutput.appendChild(row);
 
+    let isSubmitting = false;
     const sendInput = (withNewline) => {
-      if (!interactiveSocket || interactiveSocket.readyState !== WebSocket.OPEN || terminalFinished) return;
-      const value = input.value;
-      // Echo exactly where the user supplied the input, including blank lines.
-      terminalWrite(value + (withNewline ? '\n' : ''), 'terminal-input-echo');
-      interactiveSocket.send(JSON.stringify({ type: 'input', data: value, newline: withNewline }));
-      input.value = '';
-      input.focus();
+      if (isSubmitting) return;
+      isSubmitting = true;
+      try {
+        if (!interactiveSocket || interactiveSocket.readyState !== WebSocket.OPEN || terminalFinished) {
+          if (!terminalFinished) {
+            terminalFinished = true;
+            if (input) {
+              input.disabled = true;
+              input.placeholder = 'Program finished.';
+            }
+            terminalWrite('\n[Connection closed. Click Run to execute again.]\n', 'terminal-system');
+            setLoadingState(false);
+            clearTimeoutBar();
+          }
+          return;
+        }
+        const value = input.value;
+        // Echo exactly where the user supplied the input, including blank lines.
+        terminalWrite(value + (withNewline ? '\n' : ''), 'terminal-input-echo');
+        interactiveSocket.send(JSON.stringify({ type: 'input', data: value, newline: withNewline }));
+        input.value = '';
+        input.focus();
+      } finally {
+        setTimeout(() => { isSubmitting = false; }, 30);
+      }
     };
 
     row.addEventListener('submit', event => {
@@ -785,8 +804,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       if (!ticketRes.ok || !ticketData.success) {
-        // Fall back seamlessly to cloud batch execution so code always runs
-        await runBatchFallback(sourceCode, currentLang, '');
+        showInteractiveUnavailable(ticketData.userMessage || ticketData.error || 'The interactive compiler gateway returned an error.');
+        setLoadingState(false);
+        setRunButtonResult(false);
         return;
       }
 
@@ -838,6 +858,15 @@ document.addEventListener('DOMContentLoaded', () => {
             terminalWrite('\n✗ Time Limit Exceeded\n' + (message.message || 'Program execution exceeded the allowed time.') + '\n', 'stderr-chunk');
             terminalTimeoutShown = true;
           }
+          terminalFinished = true;
+          if (terminalInput) {
+            terminalInput.disabled = true;
+            terminalInput.placeholder = 'Execution timed out.';
+          }
+          setLoadingState(false);
+          setRunButtonResult(false);
+          clearTimeoutBar();
+          closeInteractiveSession(false);
         } else if (message.type === 'service-error') {
           terminalWrite('\nExecution service unavailable.\n', 'stderr-chunk');
           terminalFinished = true;
@@ -894,6 +923,13 @@ document.addEventListener('DOMContentLoaded', () => {
           setLoadingState(false);
           if (!terminalFinished) setRunButtonResult(false);
           clearTimeoutBar();
+        }
+        if (!terminalFinished) {
+          terminalFinished = true;
+          if (terminalInput) {
+            terminalInput.disabled = true;
+            terminalInput.placeholder = 'Session closed.';
+          }
         }
         interactiveSocket = null;
       };
