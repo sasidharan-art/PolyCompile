@@ -1819,6 +1819,8 @@ body.theme-light .detection-pill { background: rgba(238,240,248,0.9); }
 .interactive-terminal-input::placeholder { color:#7d8590; opacity:.85; }
 .xterm-cursor-outline, .xterm .xterm-cursor-outline { display: none !important; opacity: 0 !important; visibility: hidden !important; }
 .xterm .xterm-cursor-bar { width: 2px !important; }
+.xterm:not(:focus-within) .xterm-cursor, .xterm-terminal-view:not(:focus-within) .xterm-cursor { display: none !important; opacity: 0 !important; }
+.xterm:not(:focus-within) .xterm-helper-textarea { pointer-events: none !important; opacity: 0 !important; }
 .terminal-send-button { flex:0 0 auto; border:1px solid #30363d; border-radius:5px; padding:4px 10px; background:#21262d; color:#e6edf3; cursor:pointer; font:inherit; font-size:.78em; }
 .terminal-send-button:hover { background:#30363d; }
 .terminal-send-button:disabled,.interactive-terminal-input:disabled { opacity:.45; cursor:not-allowed; }

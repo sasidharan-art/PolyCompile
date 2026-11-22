@@ -1139,6 +1139,13 @@ document.addEventListener('DOMContentLoaded', () => {
           } else {
             terminalWrite(`\n[✗ Process exited with code ${message.code}]\n`, 'stderr-chunk');
           }
+          if (xtermInstance) {
+            try {
+              xtermInstance.blur();
+              const helper = consoleOutput.querySelector('.xterm-helper-textarea');
+              if (helper) helper.blur();
+            } catch {}
+          }
           if (terminalInputRow) {
             terminalInputRow.remove();
             terminalInputRow = null;

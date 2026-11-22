@@ -54,7 +54,7 @@ class ExecutionManager {
       if (localRunners[langId]) {
         return localRunners[langId]();
       }
-      return LocalEngines.runUniversalSimulator(language, sourceCode);
+      return LocalEngines.runUniversalSimulator(language, sourceCode, stdin);
     };
 
     // Local interpreters/simulators are development conveniences, not a secure
