@@ -576,6 +576,9 @@ document.addEventListener('DOMContentLoaded', () => {
         fontSize: 14,
         lineHeight: 1.4,
         cursorBlink: true,
+        cursorStyle: 'bar',
+        cursorWidth: 2,
+        cursorInactiveStyle: 'none',
         convertEol: true,
         scrollback: 5000
       });

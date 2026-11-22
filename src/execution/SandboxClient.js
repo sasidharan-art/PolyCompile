@@ -357,7 +357,7 @@ class SandboxClient {
    */
   static async pollJudge0Submission(token, headers, maxAttempts = 60) {
     for (let i = 0; i < maxAttempts; i++) {
-      const delay = i === 0 ? 80 : (i < 4 ? 150 : (i < 12 ? 300 : 500));
+      const delay = i === 0 ? 50 : (i < 3 ? 100 : (i < 8 ? 200 : 400));
       await new Promise(r => setTimeout(r, delay));
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
