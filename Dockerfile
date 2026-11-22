@@ -5,8 +5,26 @@
 
 FROM node:20-alpine AS base
 
-# Install security updates and common toolchains for cloud deployment
-RUN apk --no-cache add curl python3 py3-pip gcc g++ musl-dev make bash
+# Install security updates and core compilers & runtimes for live interactive execution
+RUN apk --no-cache add \
+    curl \
+    python3 \
+    py3-pip \
+    gcc \
+    g++ \
+    musl-dev \
+    make \
+    bash \
+    openjdk17-jdk \
+    rust \
+    cargo \
+    go \
+    ruby \
+    perl \
+    php \
+    lua5.4 \
+    sqlite \
+    git
 
 WORKDIR /app
 

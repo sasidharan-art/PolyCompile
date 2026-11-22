@@ -59,51 +59,6 @@ function findExecutable(names) {
   return null;
 }
 
-function hasInputPatterns(code, langId) {
-  if (!code || typeof code !== 'string') return false;
-  return /(cin\s*>>|scanf\s*\(|getline\s*\(|input\s*\(|Scanner|readLine|read_line|Console\.Read|fmt\.Scan|gets\b|fgets\b|getchar\b|STDIN|stdin\.read)/.test(code);
-}
-
-function prepareCloudSource(languageId, code) {
-  if (!code || typeof code !== 'string') return code;
-  const lang = (languageId || '').toLowerCase();
-
-  if (lang === 'cpp' || lang === 'c++') {
-    if (code.includes('cin') && !code.includes('cin.exceptions') && !/while\s*\(\s*(std::)?cin/.test(code)) {
-      let modified = code;
-      if (!modified.includes('<ios>')) {
-        modified = '#include <ios>\n' + modified;
-      }
-      const mainRegex = /(int\s+main\s*\([^)]*\)\s*\{|int\s+main\s*\(\s*\)\s*\{|void\s+main\s*\([^)]*\)\s*\{)/;
-      if (mainRegex.test(modified)) {
-        modified = modified.replace(mainRegex, '$1\n  try { std::cin.exceptions(std::ios_base::badbit | std::ios_base::failbit | std::ios_base::eofbit); } catch(...) {}\n');
-      }
-      return modified;
-    }
-  }
-
-  if (lang === 'c') {
-    if (code.includes('scanf') && !code.includes('_pc_check_eof') && !/while\s*\(\s*scanf/.test(code)) {
-      const helper = `
-#include <stdio.h>
-#include <stdlib.h>
-static inline int _pc_check_eof(int res) {
-  if (res == EOF || res == 0) {
-    fflush(stdout);
-    fprintf(stderr, "EOF reached\\n");
-    exit(1);
-  }
-  return res;
-}
-#define scanf(...) _pc_check_eof(scanf(__VA_ARGS__))
-`;
-      return helper + '\n' + code;
-    }
-  }
-
-  return code;
-}
-
 function setupInteractiveGateway(server) {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 512 * 1024 });
 
@@ -413,13 +368,12 @@ function setupInteractiveGateway(server) {
         }
 
         // -------------------------------------------------------------
-        // Tier 3: Universal Cloud Sandbox Interactive Execution
+        // Tier 3: Universal Cloud Sandbox Execution
         // (Used on Render, Vercel, lightweight cloud hosts without local compilers)
         // -------------------------------------------------------------
         isCloudSession = true;
         send({ type: 'ready', language: lang.name });
 
-        const cloudSource = prepareCloudSource(msg.languageId, sourceCode);
         accumulatedStdin = initialStdin;
 
         async function processCloudQueue() {
@@ -430,7 +384,7 @@ function setupInteractiveGateway(server) {
           try {
             const res = await ExecutionManager.execute({
               language: lang,
-              sourceCode: cloudSource,
+              sourceCode,
               stdin: accumulatedStdin
             });
 
@@ -446,39 +400,22 @@ function setupInteractiveGateway(server) {
 
             const stderr = res.stderr || '';
             const lowerErr = stderr.toLowerCase();
-            const stdoutTrimmed = fullStdout.trimEnd();
-            const stdoutEndsWithPrompt = /[:?>]\s*$/.test(stdoutTrimmed);
 
-            // Detect whether the program is waiting for more input lines
+            // Check if process is waiting for input (EOF encountered while reading)
             const isWaitingForInput =
-              (!res.success &&
-                (lowerErr.includes('eof') ||
-                 lowerErr.includes('scanf') ||
-                 lowerErr.includes('input(') ||
-                 lowerErr.includes('input') ||
-                 lowerErr.includes('readline') ||
-                 lowerErr.includes('nosuchelementexception') ||
-                 lowerErr.includes('read_line') ||
-                 lowerErr.includes('cin') ||
-                 lowerErr.includes('getline') ||
-                 lowerErr.includes('scanner') ||
-                 lowerErr.includes('accept') ||
-                 lowerErr.includes('iostream') ||
-                 lowerErr.includes('ios_base') ||
-                 lowerErr.includes('unexpected end of file') ||
-                 lowerErr.includes('end of file') ||
-                 lowerErr.includes('ioerror') ||
-                 lowerErr.includes('broken pipe') ||
-                 lowerErr.includes('standardin') ||
-                 lowerErr.includes('stdin'))) ||
-              (res.success && stdoutEndsWithPrompt && accumulatedStdin.length === 0 && hasInputPatterns(sourceCode, lang.id));
+              !res.success &&
+              (lowerErr.includes('eof') ||
+               lowerErr.includes('end of file') ||
+               lowerErr.includes('nosuchelementexception') ||
+               lowerErr.includes('ioerror') ||
+               lowerErr.includes('broken pipe'));
 
             if (!isWaitingForInput) {
               cloudFinished = true;
               if (res.compileOutput) {
                 send({ type: 'stderr', data: res.compileOutput + (res.compileOutput.endsWith('\n') ? '' : '\n'), phase: 'compile' });
               }
-              if (stderr && !lowerErr.includes('ios_base') && !lowerErr.includes('eof reached')) {
+              if (stderr) {
                 send({ type: 'stderr', data: stderr });
               }
               send({
@@ -497,7 +434,6 @@ function setupInteractiveGateway(server) {
             ws.close();
           } finally {
             isCloudExecuting = false;
-            // If user typed more input while previous turn was running, process immediately!
             if (cloudInputQueue.length > 0 && !cloudFinished) {
               const nextInput = cloudInputQueue.shift();
               accumulatedStdin += nextInput;

@@ -549,32 +549,143 @@ document.addEventListener('DOMContentLoaded', () => {
   let terminalTimeoutShown = false;
   let currentCode = '';
   let currentLang = '';
+  let xtermInstance = null;
+  let fitAddon = null;
+  let currentInputLine = '';
+
+  function initXterm() {
+    if (typeof Terminal === 'undefined' || xtermInstance) return;
+    try {
+      xtermInstance = new Terminal({
+        theme: {
+          background: '#0d1117',
+          foreground: '#c9d1d9',
+          cursor: '#58a6ff',
+          selectionBackground: 'rgba(56, 139, 253, 0.4)',
+          black: '#484f58',
+          red: '#ff7b72',
+          green: '#3fb950',
+          yellow: '#d29922',
+          blue: '#58a6ff',
+          magenta: '#bc8cff',
+          cyan: '#39c5cf',
+          white: '#b1bac4'
+        },
+        fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
+        fontSize: 14,
+        lineHeight: 1.4,
+        cursorBlink: true,
+        convertEol: true,
+        scrollback: 5000
+      });
+
+      if (typeof FitAddon !== 'undefined' && FitAddon.FitAddon) {
+        fitAddon = new FitAddon.FitAddon();
+        xtermInstance.loadAddon(fitAddon);
+      }
+
+      consoleOutput.innerHTML = '';
+      const mount = document.createElement('div');
+      mount.className = 'xterm-terminal-view';
+      consoleOutput.appendChild(mount);
+      xtermInstance.open(mount);
+      if (fitAddon) {
+        setTimeout(() => fitAddon.fit(), 30);
+      }
+
+      xtermInstance.onData(data => {
+        if (!interactiveSocket || interactiveSocket.readyState !== WebSocket.OPEN || terminalFinished) return;
+
+        if (data === '\r') {
+          xtermInstance.write('\r\n');
+          const value = currentInputLine;
+          currentInputLine = '';
+          interactiveSocket.send(JSON.stringify({ type: 'input', data: value, newline: true }));
+        } else if (data === '\u007f' || data === '\b') {
+          if (currentInputLine.length > 0) {
+            currentInputLine = currentInputLine.slice(0, -1);
+            xtermInstance.write('\b \b');
+          }
+        } else if (data === '\u0003') {
+          xtermInstance.write('^C\r\n');
+          interactiveSocket.send(JSON.stringify({ type: 'stop' }));
+          terminalFinished = true;
+          setLoadingState(false);
+          clearTimeoutBar();
+        } else if (data === '\u0004') {
+          if (currentInputLine.length > 0) {
+            const value = currentInputLine;
+            currentInputLine = '';
+            interactiveSocket.send(JSON.stringify({ type: 'input', data: value, newline: true }));
+          } else {
+            xtermInstance.write('^D\r\n');
+            interactiveSocket.send(JSON.stringify({ type: 'eof' }));
+          }
+        } else if (data >= ' ' || data === '\t' || data.length > 1) {
+          currentInputLine += data;
+          xtermInstance.write(data);
+        }
+      });
+    } catch (e) {
+      console.warn('Xterm initialization skipped:', e);
+      xtermInstance = null;
+    }
+  }
 
   function resetTerminal() {
+    currentInputLine = '';
+    terminalFinished = false;
+    terminalCompileErrorShown = false;
+    terminalProgramOutputSeen = false;
+    terminalTimeoutShown = false;
+
+    if (typeof Terminal !== 'undefined' && !xtermInstance) {
+      initXterm();
+    }
+
+    if (xtermInstance) {
+      xtermInstance.reset();
+      xtermInstance.focus();
+      return;
+    }
+
     consoleOutput.innerHTML = '';
     terminalText = document.createElement('pre');
     terminalText.className = 'interactive-terminal-text';
     consoleOutput.appendChild(terminalText);
     terminalInput = null;
     terminalInputRow = null;
-    terminalFinished = false;
-    terminalCompileErrorShown = false;
-    terminalProgramOutputSeen = false;
-    terminalTimeoutShown = false;
     consoleOutput.scrollTop = 0;
   }
 
   function terminalWrite(value, className = 'stdout-chunk') {
+    const text = String(value ?? '');
+    if (xtermInstance) {
+      let formatted = text.replace(/\r?\n/g, '\r\n');
+      if (className === 'stderr-chunk' || className === 'terminal-error') {
+        formatted = `\x1b[31m${formatted}\x1b[0m`;
+      } else if (className === 'terminal-success') {
+        formatted = `\x1b[32m${formatted}\x1b[0m`;
+      } else if (className === 'terminal-system') {
+        formatted = `\x1b[90m${formatted}\x1b[0m`;
+      }
+      xtermInstance.write(formatted);
+      return;
+    }
+
     if (!terminalText) resetTerminal();
     const span = document.createElement('span');
     span.className = className;
-    // Preserve exact whitespace and never interpret program output as HTML.
-    span.textContent = String(value ?? '').replace(/\r\n/g, '\n');
+    span.textContent = text.replace(/\r\n/g, '\n');
     terminalText.appendChild(span);
     consoleOutput.scrollTop = consoleOutput.scrollHeight;
   }
 
   function ensureTerminalInput() {
+    if (xtermInstance) {
+      xtermInstance.focus();
+      return { disabled: false, placeholder: '', focus: () => xtermInstance.focus(), value: '' };
+    }
     if (terminalInputRow && terminalInputRow.isConnected) return terminalInput;
     const row = document.createElement('form');
     row.className = 'interactive-terminal-input-row';
@@ -1342,6 +1453,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function clearConsole() {
+    if (xtermInstance) {
+      xtermInstance.clear();
+      return;
+    }
     // Clear only the visible transcript. Never kill a running process just
     // because the user wants a clean terminal view. Preserve unsent input.
     const pendingLine = terminalInput?.value || '';
