@@ -383,5 +383,110 @@
     "expected": "V execution works!",
     "source": "fn main() { println('V execution works!') }",
     "stdin": ""
+  },
+  {
+    "id": "common-lisp",
+    "sourceFile": "main.lisp",
+    "expected": "Common Lisp execution works!",
+    "source": "(format t \"Common Lisp execution works!~%\")",
+    "stdin": ""
+  },
+  {
+    "id": "zsh",
+    "sourceFile": "main.zsh",
+    "expected": "Zsh execution works!",
+    "source": "echo \"Zsh execution works!\"",
+    "stdin": ""
+  },
+  {
+    "id": "jq",
+    "sourceFile": "filter.jq",
+    "expected": "jq execution works!",
+    "source": ".",
+    "stdin": "\"jq execution works!\""
+  },
+  {
+    "id": "sed",
+    "sourceFile": "script.sed",
+    "expected": "Sed execution works!",
+    "source": "s/test/Sed execution works!/",
+    "stdin": "test"
+  },
+  {
+    "id": "dash",
+    "sourceFile": "main.sh",
+    "expected": "Dash execution works!",
+    "source": "echo \"Dash execution works!\"",
+    "stdin": ""
+  },
+  {
+    "id": "makefile",
+    "sourceFile": "Makefile",
+    "expected": "Makefile execution works!",
+    "source": "all:\n\t@echo Makefile execution works!",
+    "stdin": ""
+  },
+  {
+    "id": "raku",
+    "sourceFile": "main.raku",
+    "expected": "Raku execution works!",
+    "source": "say \"Raku execution works!\";",
+    "stdin": ""
+  },
+  {
+    "id": "solidity",
+    "sourceFile": "main.sol",
+    "expected": "",
+    "source": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\ncontract Main {}",
+    "stdin": ""
+  },
+  {
+    "id": "haxe",
+    "sourceFile": "Main.hx",
+    "expected": "Haxe execution works!",
+    "source": "class Main { static function main() { Sys.println(\"Haxe execution works!\"); } }",
+    "stdin": ""
+  },
+  {
+    "id": "coffeescript",
+    "sourceFile": "main.coffee",
+    "expected": "CoffeeScript execution works!",
+    "source": "console.log \"CoffeeScript execution works!\"",
+    "stdin": ""
+  },
+  {
+    "id": "emacslisp",
+    "sourceFile": "main.el",
+    "expected": "Emacs Lisp execution works!",
+    "source": "(princ \"Emacs Lisp execution works!\")",
+    "stdin": ""
+  },
+  {
+    "id": "smalltalk",
+    "sourceFile": "main.st",
+    "expected": "Smalltalk execution works!",
+    "source": "Transcript show: 'Smalltalk execution works!'; cr.",
+    "stdin": ""
+  },
+  {
+    "id": "bc",
+    "sourceFile": "main.bc",
+    "expected": "bc execution works!",
+    "source": "print \"bc execution works!\\n\"",
+    "stdin": ""
+  },
+  {
+    "id": "wat",
+    "sourceFile": "main.wat",
+    "expected": "",
+    "source": "(module (func $main (result i32) i32.const 42))",
+    "stdin": ""
+  },
+  {
+    "id": "simula",
+    "sourceFile": "main.sim",
+    "expected": "Simula execution works!",
+    "source": "Begin OutText(\"Simula execution works!\"); OutImage; End;",
+    "stdin": ""
   }
 ]

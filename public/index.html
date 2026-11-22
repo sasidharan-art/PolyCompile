@@ -199,12 +199,31 @@
           <span>Inspect Phases</span>
           <kbd>Ctrl+/</kbd>
         </button>
+        <button type="button" class="btn btn-custom-stdin" id="toggleCustomStdinBtn" title="Toggle Predefined Input (Mode B: Custom Stdin)">
+          <i class="fa-solid fa-keyboard"></i>
+          <span>Custom Input</span>
+        </button>
         <div class="run-options">
           <label class="toggle-label" title="Use built-in JavaScript/Brainfuck runtime (no Docker needed for JS/BF)">
             <input type="checkbox" id="preferLocalCheck">
             <span class="toggle-switch"></span>
             <span class="toggle-text">Local Runtime</span>
           </label>
+        </div>
+      </div>
+
+      <!-- COLLAPSIBLE PREDEFINED STDIN PANEL (MODE B) -->
+      <div class="custom-stdin-panel" id="customStdinPanel" style="display: none;">
+        <div class="custom-stdin-header">
+          <span class="custom-stdin-title"><i class="fa-solid fa-terminal"></i> Predefined Standard Input (Mode B: Custom Stdin)</span>
+          <div class="custom-stdin-tools">
+            <button type="button" class="btn-text-action" id="clearCustomStdinBtn">Clear</button>
+            <button type="button" class="btn-text-action" id="closeCustomStdinBtn" title="Close input panel">&times;</button>
+          </div>
+        </div>
+        <textarea id="customStdin" class="custom-stdin-textarea" placeholder="Paste custom standard input here upfront (e.g. 50 lines of competitive programming input, matrix rows, arrays)..." rows="4"></textarea>
+        <div class="custom-stdin-status">
+          <i class="fa-solid fa-circle-info"></i> Mode B: When provided, this input is fed to the program immediately on execution. Leave empty for Mode A (interactive live terminal).
         </div>
       </div>
     </section>

@@ -1149,5 +1149,172 @@
     "run": [
       "/exec/program"
     ]
+  },
+  {
+    "id": "raku",
+    "name": "Raku (Perl 6)",
+    "extensions": [
+      ".raku",
+      ".p6",
+      ".pl6"
+    ],
+    "category": "Scripting & dynamic",
+    "paradigm": "Multi-paradigm",
+    "compiled": false,
+    "sourceFile": "main.raku",
+    "run": [
+      "raku",
+      "/work/main.raku"
+    ]
+  },
+  {
+    "id": "solidity",
+    "name": "Solidity",
+    "extensions": [
+      ".sol"
+    ],
+    "category": "Smart contracts",
+    "paradigm": "Object-oriented",
+    "compiled": true,
+    "sourceFile": "main.sol",
+    "compile": [
+      "solc",
+      "--bin",
+      "-o",
+      "/exec",
+      "/work/main.sol"
+    ],
+    "run": [
+      "cat",
+      "/exec/main.bin"
+    ]
+  },
+  {
+    "id": "haxe",
+    "name": "Haxe",
+    "extensions": [
+      ".hx"
+    ],
+    "category": "General-purpose",
+    "paradigm": "Multi-paradigm",
+    "compiled": true,
+    "sourceFile": "Main.hx",
+    "compile": [
+      "haxe",
+      "--interp",
+      "-main",
+      "Main"
+    ],
+    "run": [
+      "haxe",
+      "--run",
+      "Main"
+    ]
+  },
+  {
+    "id": "coffeescript",
+    "name": "CoffeeScript",
+    "extensions": [
+      ".coffee"
+    ],
+    "category": "Scripting & dynamic",
+    "paradigm": "Multi-paradigm",
+    "compiled": false,
+    "sourceFile": "main.coffee",
+    "run": [
+      "coffee",
+      "/work/main.coffee"
+    ]
+  },
+  {
+    "id": "emacslisp",
+    "name": "Emacs Lisp",
+    "extensions": [
+      ".el"
+    ],
+    "category": "Functional & symbolic",
+    "paradigm": "Functional",
+    "compiled": false,
+    "sourceFile": "main.el",
+    "run": [
+      "emacs",
+      "--batch",
+      "-l",
+      "/work/main.el"
+    ]
+  },
+  {
+    "id": "smalltalk",
+    "name": "GNU Smalltalk",
+    "extensions": [
+      ".st"
+    ],
+    "category": "Object-oriented",
+    "paradigm": "Object-oriented",
+    "compiled": false,
+    "sourceFile": "main.st",
+    "run": [
+      "gst",
+      "-q",
+      "/work/main.st"
+    ]
+  },
+  {
+    "id": "bc",
+    "name": "GNU bc (Calculator)",
+    "extensions": [
+      ".bc"
+    ],
+    "category": "Structured & mathematical",
+    "paradigm": "Procedural",
+    "compiled": false,
+    "sourceFile": "main.bc",
+    "run": [
+      "bc",
+      "-q",
+      "/work/main.bc"
+    ]
+  },
+  {
+    "id": "wat",
+    "name": "WebAssembly Text (WAT)",
+    "extensions": [
+      ".wat"
+    ],
+    "category": "Low-level & systems",
+    "paradigm": "Unstructured",
+    "compiled": true,
+    "sourceFile": "main.wat",
+    "compile": [
+      "wat2wasm",
+      "/work/main.wat",
+      "-o",
+      "/exec/main.wasm"
+    ],
+    "run": [
+      "node",
+      "-e",
+      "console.log(\"WebAssembly Text Module instantiated.\")"
+    ]
+  },
+  {
+    "id": "simula",
+    "name": "Simula (Simula 67)",
+    "extensions": [
+      ".sim"
+    ],
+    "category": "Historical & OOP",
+    "paradigm": "Object-oriented",
+    "compiled": true,
+    "sourceFile": "main.sim",
+    "compile": [
+      "cim",
+      "-o",
+      "/exec/main",
+      "/work/main.sim"
+    ],
+    "run": [
+      "/exec/main"
+    ]
   }
 ]

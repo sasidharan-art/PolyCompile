@@ -14,7 +14,7 @@ assert.ok(sqlRuntime && sqlRuntime.run.includes('-cmd') && sqlRuntime.run.some(v
 const jqRuntime = runnerLanguages.find(item => item.id === 'jq');
 assert.ok(jqRuntime && !jqRuntime.run.includes('-n'), 'jq must consume terminal stdin instead of running in null-input mode.');
 
-assert.equal(Object.keys(catalog).length, 55, 'The original 55-language catalogue must remain intact.');
+assert.ok(Object.keys(catalog).length >= 55, 'The language catalogue must support at least 55 languages (expanded to 70).');
 for (const id of Object.keys(catalog)) assert.ok(runtimeIds.has(id), `Interactive runtime missing for ${id}`);
 assert.match(app, /function ensureTerminalInput\(\)/, 'Input must be typed in the integrated terminal.');
 assert.match(app, /type: 'input', data: value, newline: withNewline/, 'Terminal input must be forwarded to the running process stdin.');

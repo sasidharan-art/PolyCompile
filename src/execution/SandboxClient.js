@@ -121,7 +121,11 @@ class SandboxClient {
     groovy: 88,        // Groovy (3.0.3)
     fsharp: 87,        // F# (.NET Core SDK 3.1.202)
     objectivec: 79,    // Objective-C (Clang 7.0.1)
-    vbnet: 84          // Visual Basic .NET (vbnc 0.0.0.5943)
+    vbnet: 84,         // Visual Basic .NET (vbnc 0.0.0.5943)
+    'common-lisp': 55, // Common Lisp (SBCL)
+    zsh: 46,           // Zsh (via shell runner)
+    dash: 46,          // Dash (POSIX shell)
+    ruby_script: 72    // Ruby Script
   };
 
   // Language mapping for Wandbox
@@ -137,16 +141,20 @@ class SandboxClient {
     typescript: 'typescript-5.6.2',
     php: 'php-8.3.12',
     ruby: 'ruby-4.0.2',
+    ruby_script: 'ruby-4.0.2',
     swift: 'swift-6.0.1',
     scala: 'scala-3.5.1',
     haskell: 'ghc-9.10.1',
     elixir: 'elixir-1.17.3',
     ocaml: 'ocaml-5.2.0',
     lisp: 'clisp-2.49',
+    'common-lisp': 'clisp-2.49',
     pascal: 'fpc-3.2.2',
     perl: 'perl-5.44.0',
     lua: 'lua-5.4.7',
     bash: 'bash',
+    zsh: 'bash',
+    dash: 'bash',
     zig: 'zig-head',
     sql: 'sqlite-3.46.1',
     d: 'dmd-2.109.1',
@@ -155,7 +163,9 @@ class SandboxClient {
     crystal: 'crystal-1.13.3',
     julia: 'julia-1.10.5',
     groovy: 'groovy-4.0.23',
-    r: 'r-4.4.1'
+    r: 'r-4.4.1',
+    coffeescript: 'coffeescript-2.7.0',
+    raku: 'raku-2024.07'
   };
 
   /**

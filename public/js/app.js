@@ -29,6 +29,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const consoleOutput       = document.getElementById('consoleOutput');
   const toastContainer      = document.getElementById('toastContainer');
 
+  const toggleCustomStdinBtn = document.getElementById('toggleCustomStdinBtn');
+  const customStdinPanel     = document.getElementById('customStdinPanel');
+  const customStdin          = document.getElementById('customStdin');
+  const clearCustomStdinBtn  = document.getElementById('clearCustomStdinBtn');
+  const closeCustomStdinBtn  = document.getElementById('closeCustomStdinBtn');
+
   const detectedLangName    = document.getElementById('detectedLangName');
   const detectedConfidenceBadge = document.getElementById('detectedConfidenceBadge');
   const detectedParadigmBadge   = document.getElementById('detectedParadigmBadge');
@@ -840,6 +846,10 @@ document.addEventListener('DOMContentLoaded', () => {
     setLoadingState(true, 'Connecting…');
     startTimeoutBar(MAX_RUN_TIMEOUT_MS);
     terminalWrite(`[${new Date().toLocaleTimeString()}] Execution started — ${currentLang || 'Auto-detect'}\n`, 'terminal-system');
+    const customStdinVal = (customStdin && customStdin.value) ? customStdin.value : '';
+    if (customStdinVal.trim().length > 0) {
+      terminalWrite(`[Mode B: Predefined input fed to stdin (${customStdinVal.trim().split(/\r?\n/).length} lines)]\n`, 'terminal-system');
+    }
 
     try {
       if (!currentLang || currentLang === 'auto') {
@@ -890,8 +900,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
       interactiveSocket.onopen = () => {
         if (!interactiveSocket) return;
+        const customStdinVal = (customStdin && customStdin.value) ? customStdin.value : '';
         interactiveSocket.send(JSON.stringify({
-          type: 'start', sourceCode: currentCode, languageId: currentLang, timeoutMs: MAX_RUN_TIMEOUT_MS
+          type: 'start',
+          sourceCode: currentCode,
+          languageId: currentLang,
+          timeoutMs: MAX_RUN_TIMEOUT_MS,
+          stdin: customStdinVal
         }));
         setLoadingState(true, 'Compiling…');
       };
@@ -1344,6 +1359,29 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   clearConsoleBtn.addEventListener('click', clearConsole);
+
+  if (toggleCustomStdinBtn && customStdinPanel) {
+    toggleCustomStdinBtn.addEventListener('click', () => {
+      const isHidden = customStdinPanel.style.display === 'none';
+      customStdinPanel.style.display = isHidden ? 'flex' : 'none';
+      toggleCustomStdinBtn.classList.toggle('active', isHidden);
+      if (isHidden && customStdin) {
+        customStdin.focus();
+      }
+    });
+  }
+  if (closeCustomStdinBtn && customStdinPanel) {
+    closeCustomStdinBtn.addEventListener('click', () => {
+      customStdinPanel.style.display = 'none';
+      if (toggleCustomStdinBtn) toggleCustomStdinBtn.classList.remove('active');
+    });
+  }
+  if (clearCustomStdinBtn && customStdin) {
+    clearCustomStdinBtn.addEventListener('click', () => {
+      customStdin.value = '';
+      customStdin.focus();
+    });
+  }
 
   if (copyOutputBtn) copyOutputBtn.addEventListener('click', async () => {
     const text = terminalText?.textContent || consoleOutput.innerText || '';

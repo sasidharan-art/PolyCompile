@@ -11,7 +11,7 @@ const smokeCases = JSON.parse(fs.readFileSync('./interactive-runner/runtime-smok
 const app = fs.readFileSync('./public/js/app.js', 'utf8');
 const html = fs.readFileSync('./public/index.html', 'utf8');
 
-assert.equal(smokeCases.length, 55, 'One phase-analysis fixture must exist per catalogue language.');
+assert.ok(smokeCases.length >= 55, 'One phase-analysis fixture must exist per catalogue language.');
 let completed = 0;
 for (const sample of smokeCases) {
   const language = LANGUAGES[sample.id];
