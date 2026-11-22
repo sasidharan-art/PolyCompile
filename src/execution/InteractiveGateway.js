@@ -59,6 +59,48 @@ function findExecutable(names) {
   return null;
 }
 
+function prepareCloudSource(languageId, code) {
+  if (!code || typeof code !== 'string') return code;
+  const lang = (languageId || '').toLowerCase();
+
+  if (lang === 'c') {
+    if (code.includes('scanf') && !code.includes('_pc_scanf_helper')) {
+      const helper = `
+#include <stdio.h>
+#include <stdlib.h>
+static inline int _pc_scanf_helper(int r) {
+  if (r == -1 || r == 0) {
+    fflush(stdout);
+    fprintf(stderr, "__PC_EOF__\\n");
+    exit(42);
+  }
+  return r;
+}
+#define scanf(...) _pc_scanf_helper(scanf(__VA_ARGS__))
+`;
+      return helper + '\n' + code;
+    }
+  }
+
+  if (lang === 'cpp' || lang === 'c++') {
+    if (code.includes('cin') && !code.includes('_PcIoInit') && !/while\s*\(\s*(std::)?cin/.test(code)) {
+      const helper = `
+#include <ios>
+#include <iostream>
+struct _PcIoInit {
+  _PcIoInit() {
+    try { std::cin.exceptions(std::ios_base::badbit | std::ios_base::failbit | std::ios_base::eofbit); } catch(...) {}
+  }
+};
+static _PcIoInit _pc_io_init;
+`;
+      return helper + '\n' + code;
+    }
+  }
+
+  return code;
+}
+
 function setupInteractiveGateway(server) {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 512 * 1024 });
 
@@ -95,6 +137,7 @@ function setupInteractiveGateway(server) {
     let sourceCode = '';
     let isCloudExecuting = false;
     let cloudInputQueue = [];
+    let processCloudQueue = null;
 
     // Rolling Inactivity Timer (3 full minutes per interaction turn)
     let inactivityTimer = null;
@@ -374,9 +417,10 @@ function setupInteractiveGateway(server) {
         isCloudSession = true;
         send({ type: 'ready', language: lang.name });
 
+        const cloudSource = prepareCloudSource(msg.languageId, sourceCode);
         accumulatedStdin = initialStdin;
 
-        async function processCloudQueue() {
+        processCloudQueue = async function() {
           if (cloudFinished || isCloudExecuting) return;
           isCloudExecuting = true;
           resetTimer();
@@ -384,7 +428,7 @@ function setupInteractiveGateway(server) {
           try {
             const res = await ExecutionManager.execute({
               language: lang,
-              sourceCode,
+              sourceCode: cloudSource,
               stdin: accumulatedStdin
             });
 
@@ -404,8 +448,11 @@ function setupInteractiveGateway(server) {
             // Check if process is waiting for input (EOF encountered while reading)
             const isWaitingForInput =
               !res.success &&
-              (lowerErr.includes('eof') ||
-               lowerErr.includes('end of file') ||
+              (lowerErr.includes('__pc_eof__') ||
+               lowerErr.includes('basic_ios') ||
+               lowerErr.includes('iostream error') ||
+               lowerErr.includes('eoferror') ||
+               lowerErr.includes('eof') ||
                lowerErr.includes('nosuchelementexception') ||
                lowerErr.includes('ioerror') ||
                lowerErr.includes('broken pipe'));
@@ -415,7 +462,7 @@ function setupInteractiveGateway(server) {
               if (res.compileOutput) {
                 send({ type: 'stderr', data: res.compileOutput + (res.compileOutput.endsWith('\n') ? '' : '\n'), phase: 'compile' });
               }
-              if (stderr) {
+              if (stderr && !lowerErr.includes('__pc_eof__') && !lowerErr.includes('basic_ios') && !lowerErr.includes('iostream error')) {
                 send({ type: 'stderr', data: stderr });
               }
               send({
