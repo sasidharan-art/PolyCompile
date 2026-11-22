@@ -116,10 +116,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (snipRes && snipRes.success) {
         allSnippets = snipRes.snippets;
         populateSnippetsDropdown(snipRes.snippets);
-        if (allSnippets.length > 0) loadSnippet(allSnippets[0].id);
-        else inspectPhases({ switchTabToPhases: false, silent: true });
-      } else {
-        inspectPhases({ switchTabToPhases: false, silent: true });
+        // Start with an empty editor on site load
+        codeEditor.value = '';
+        snippetSelect.value = '';
+        UI.syncLineNumbers(codeEditor, lineNumbers);
+        updateFileInfo();
       }
 
       await checkServerHealth();
