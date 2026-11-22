@@ -536,11 +536,20 @@ function setupInteractiveGateway(server) {
               send({ type: 'ack', waitingForInput: true });
             } else {
               cloudFinished = true;
-              if (res.compileOutput) {
+              // Only report compiler output if compilation actually failed
+              if (!res.success && res.compileOutput) {
                 send({ type: 'stderr', data: res.compileOutput + (res.compileOutput.endsWith('\n') ? '' : '\n'), phase: 'compile' });
               }
+              // Send runtime stderr only if execution failed and it is not an EOF detection signal
               if (stderr && !lowerErr.includes('__pc_eof__') && !lowerErr.includes('basic_ios') && !lowerErr.includes('iostream error')) {
-                send({ type: 'stderr', data: stderr });
+                if (!res.success) {
+                  send({ type: 'stderr', data: stderr });
+                } else if (!fullStdout) {
+                  const isCompilerBanner = /linking\s+main|\d+\s+lines\s+compiled|warning:\s*link\.res/i.test(stderr);
+                  if (!isCompilerBanner && stderr.trim().length > 0) {
+                    send({ type: 'stdout', data: stderr });
+                  }
+                }
               }
               send({
                 type: 'exit',

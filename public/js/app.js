@@ -1086,11 +1086,15 @@ document.addEventListener('DOMContentLoaded', () => {
           inp.focus();
         } else if (message.type === 'stderr') {
           if (message.phase !== 'compile' && message.data) terminalProgramOutputSeen = true;
-          if (message.phase === 'compile' && !terminalCompileErrorShown) {
-            terminalWrite('\n[Compiler diagnostics]\n', 'terminal-system');
-            terminalCompileErrorShown = true;
+          if (message.phase === 'compile') {
+            if (!terminalCompileErrorShown) {
+              terminalWrite('\n[Compiler diagnostics]\n', 'terminal-system');
+              terminalCompileErrorShown = true;
+            }
+            terminalWrite(message.data || '', 'compile-output-chunk');
+          } else {
+            terminalWrite(message.data || '', 'stderr-chunk');
           }
-          terminalWrite(message.data || '', 'stderr-chunk');
         } else if (message.type === 'timeout') {
           if (!terminalTimeoutShown) {
             terminalWrite('\n✗ Time Limit Exceeded\n' + (message.message || 'Program execution exceeded the allowed time.') + '\n', 'stderr-chunk');

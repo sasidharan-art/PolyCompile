@@ -10,7 +10,7 @@
 |---|---|
 | **Project Title** | PolyCompile — Universal Online IDE & Educational Compiler Platform |
 | **System Category** | Cloud-Native Compiler Infrastructure & Interactive Developer Tooling |
-| **Current Release** | Version 1.0.0 (Production / Hackathon Final) |
+| **Current Release** | Version 1.0.0 (Production Release) |
 | **Deployment URL** | [https://polycompile-odq5.onrender.com](https://polycompile-odq5.onrender.com) |
 | **Source Repository** | [https://github.com/sasidharan-art/PolyCompile.git](https://github.com/sasidharan-art/PolyCompile.git) |
 | **Primary Languages** | JavaScript (Node.js 18+ / 20+), HTML5, CSS3, WebSockets, Shell, Docker |
@@ -294,7 +294,7 @@ Test Suite 8: Built-in Offline Execution Engines           --> PASS
 
 - **Live Production URL:** [https://polycompile-odq5.onrender.com](https://polycompile-odq5.onrender.com)
 - **GitHub Repository:** [https://github.com/sasidharan-art/PolyCompile](https://github.com/sasidharan-art/PolyCompile)
-- **Packaging:** Full distribution package created at `PolyCompile-Hackathon-Ready.zip`.
+- **Packaging:** Full production distribution package created at `PolyCompile-Production-Release.zip`.
 - **Zero Local Footprint:** Designed to run in any browser with zero client-side dependencies, no plugins, and cross-platform compatibility (Desktop, Tablet, Mobile).
 
 ---
@@ -306,7 +306,7 @@ Test Suite 8: Built-in Offline Execution Engines           --> PASS
 | **Universal Input/Output** | **Complete** | Supports all input formats, prompt structures, nested loops, and arbitrary user algorithms. |
 | **Bidirectional Terminal** | **Complete** | Programiz-style streaming terminal with physical `Enter` key and clickable `Send ↵` button. |
 | **Proxy Keep-Alive** | **Complete** | 10-second bidirectional heartbeat ensures zero session disconnects on Render/Cloudflare. |
-| **Low-Latency Polling** | **Complete** | Adaptive backoff (`80ms-300ms`) speeds up cloud execution by over 70%. |
+| **Low-Latency Polling** | **Complete** | Adaptive backoff (`50ms-300ms`) speeds up cloud execution by over 70%. |
 | **70 Languages Supported** | **Complete** | Registered, tested, and categorized across 7 distinct computing paradigms. |
 | **Compiler Pipeline Inspection** | **Complete** | Interactive visual inspector covering all 5 theoretical compiler design phases. |
 | **Code Sanitization & Security** | **Complete** | Ephemeral sandboxing, non-root execution, network isolation, and strict resource caps. |
@@ -314,4 +314,4 @@ Test Suite 8: Built-in Offline Execution Engines           --> PASS
 
 ---
 
-*PolyCompile — Engineered for Hackathon Review & Educational Excellence.*
+*PolyCompile — Engineered for Technical Review & Educational Excellence.*
