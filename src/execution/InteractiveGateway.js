@@ -74,9 +74,48 @@ function findExecutable(names) {
   return null;
 }
 
+function sourceReadsStdin(source, languageId) {
+  if (!source || typeof source !== 'string') return false;
+  const lang = (languageId || '').toLowerCase();
+  const patterns = {
+    c: /\b(scanf|getchar|fgets|fscanf|gets)\s*\(/,
+    cpp: /\b(cin|getline|getchar|scanf)\b/,
+    java: /\b(Scanner|BufferedReader|System\.in|readLine|nextInt|nextLine|nextDouble)\b/,
+    python: /\b(input|stdin\.read|stdin\.readline)\s*\(/,
+    javascript: /\b(readline|createInterface|question|prompt|readFileSync)\s*\(|\bprocess\.stdin\b/,
+    typescript: /\b(readline|createInterface|question|prompt|readFileSync)\s*\(|\bprocess\.stdin\b/,
+    csharp: /\b(ReadLine|ReadKey|ReadToEnd)\s*\(/,
+    go: /\b(Scan|Scanln|Scanf|ReadString|ReadBytes|ReadAll)\s*\(|\bos\.Stdin\b/,
+    rust: /\b(read_line|read_to_string|stdin)\b/,
+    php: /\b(fgets|readline|file_get_contents)\s*\(|php:\/\/stdin/,
+    ruby: /\b(gets|readline)\b|\bSTDIN\.read\b/,
+    ruby_script: /\b(gets|readline)\b|\bSTDIN\.read\b/,
+    bash: /\bread\s+/,
+    zsh: /\bread\s+/,
+    fish: /\bread\s+/,
+    powershell: /\b(Read-Host)\b/i,
+    pascal: /\b(read|readln)\s*\(/i,
+    fortran: /\bread\s*\(/i,
+    ada: /\b(Get|Get_Line)\s*\(/,
+    basic: /\b(INPUT|LINE INPUT)\b/i,
+    kotlin: /\b(readLine|Scanner|System\.in)\b/,
+    swift: /\b(readLine|readLine\s*\()/,
+    scala: /\b(StdIn\.read|readLine|readInt)\b/,
+    haskell: /\b(getLine|getContents|getChar)\b/
+  };
+  return patterns[lang] ? patterns[lang].test(source) : /\b(input|read|scanf|cin)\b/i.test(source);
+}
+
 function prepareCloudSource(languageId, code) {
   if (!code || typeof code !== 'string') return code;
   const lang = (languageId || '').toLowerCase();
+
+  if (lang === 'pascal') {
+    if (/\b(read|readln)\s*\(/i.test(code)) {
+      return code.replace(/\b(read|readln)\s*\(/gi, 'if eof then Halt(42); $1(');
+    }
+    return code;
+  }
 
   if (lang === 'c') {
     if (!code.includes('_pc_scanf_helper')) {
@@ -513,29 +552,42 @@ function setupInteractiveGateway(server) {
 
             const stderr = res.stderr || '';
             const lowerErr = stderr.toLowerCase();
+            let decodedErr = lowerErr;
+            try {
+              if (/^[A-Za-z0-9+/=]+$/.test(stderr.trim())) {
+                decodedErr += ' ' + Buffer.from(stderr.trim(), 'base64').toString('utf8').toLowerCase();
+              }
+            } catch {}
 
             // Check if process is waiting for input (EOF encountered while reading)
-            const isWaitingForInput =
+            let isWaitingForInput =
               !res.success &&
               (res.exitCode === 42 ||
-               lowerErr.includes('__pc_eof__') ||
-               lowerErr.includes('basic_ios') ||
-               lowerErr.includes('iostream error') ||
-               lowerErr.includes('eoferror') ||
-               lowerErr.includes('eof') ||
-               lowerErr.includes('nosuchelementexception') ||
-               lowerErr.includes('nullpointerexception') ||
-               lowerErr.includes('nullreferenceexception') ||
-               lowerErr.includes('argumentnullexception') ||
-               lowerErr.includes('nomethoderror') ||
-               lowerErr.includes('nilclass') ||
-               lowerErr.includes('ioerror') ||
-               lowerErr.includes('unexpectedly found nil') ||
-               lowerErr.includes('end of file') ||
-               lowerErr.includes('end-of-file') ||
-               lowerErr.includes('runtime error 106') ||
-               lowerErr.includes('runtime error 107') ||
-               lowerErr.includes('broken pipe'));
+               decodedErr.includes('42') ||
+               decodedErr.includes('status 42') ||
+               decodedErr.includes('__pc_eof__') ||
+               decodedErr.includes('basic_ios') ||
+               decodedErr.includes('iostream error') ||
+               decodedErr.includes('eoferror') ||
+               decodedErr.includes('eof') ||
+               decodedErr.includes('nosuchelementexception') ||
+               decodedErr.includes('nullpointerexception') ||
+               decodedErr.includes('nullreferenceexception') ||
+               decodedErr.includes('argumentnullexception') ||
+               decodedErr.includes('nomethoderror') ||
+               decodedErr.includes('nilclass') ||
+               decodedErr.includes('ioerror') ||
+               decodedErr.includes('unexpectedly found nil') ||
+               decodedErr.includes('end of file') ||
+               decodedErr.includes('end-of-file') ||
+               decodedErr.includes('runtime error 106') ||
+               decodedErr.includes('runtime error 107') ||
+               decodedErr.includes('broken pipe'));
+
+            // If the code explicitly reads stdin and user hasn't provided input yet, never prematurely exit
+            if (!isWaitingForInput && accumulatedStdin === '' && sourceReadsStdin(sourceCode, lang?.id)) {
+              isWaitingForInput = true;
+            }
 
             if (isWaitingForInput) {
               send({ type: 'ack', waitingForInput: true });
