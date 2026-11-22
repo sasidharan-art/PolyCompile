@@ -625,15 +625,18 @@ const LANGUAGES = {
     signatureRegexes: [
       /def\s+[a-zA-Z0-9_]+\s*\(.*\)\s*:/i,
       /print\s*\(/i,
+      /input\s*\(/i,
       /if\s+__name__\s*==\s*['"]__main__['"]\s*:/i,
-      /import\s+sys|import\s+os|import\s+math/i,
+      /import\s+sys|import\s+os|import\s+math|import\s+json/i,
       /from\s+[a-zA-Z0-9_.]+\s+import/i,
-      /class\s+[a-zA-Z0-9_]+(\s*\(.*\))?\s*:/i
+      /class\s+[a-zA-Z0-9_]+(\s*\(.*\))?\s*:/i,
+      /for\s+[a-zA-Z0-9_,\s]+\s+in\s+range\s*\(/i,
+      /elif\s+.*:/i
     ],
     keywords: [
       'def', 'class', 'import', 'from', 'as', 'return', 'if', 'elif', 'else',
       'for', 'while', 'in', 'is', 'not', 'and', 'or', 'try', 'except', 'finally',
-      'with', 'yield', 'lambda', 'pass', 'None', 'True', 'False', 'print'
+      'with', 'yield', 'lambda', 'pass', 'None', 'True', 'False', 'print', 'input', 'range'
     ],
     features: {
       indentationBased: true,
@@ -1516,8 +1519,14 @@ const LANGUAGES = {
     monacoLang: 'json',
     category: 'Declarative',
     description: 'Lightweight and flexible command-line JSON processor and stream-transform functional language.',
-    signatureRegexes: [/def\s+\w+:/, /\.\w+/, /map\(/, /select\(/],
-    keywords: ['def', 'map', 'select', 'keys', 'length', 'if', 'then', 'else', 'end', 'empty'],
+    signatureRegexes: [
+      /^\s*\.[a-zA-Z0-9_\[\]]/m,
+      /\|\s*\.[a-zA-Z0-9_\[\]]/,
+      /\.\[\s*\]/,
+      /\|\s*(map|select|keys)\b/,
+      /def\s+[a-zA-Z0-9_]+(\([^)]*\))?\s*:\s*\./
+    ],
+    keywords: ['select', 'keys', 'empty', 'recurse', 'flatten', 'to_entries', 'from_entries'],
     features: { commentStyles: ['#'] }
   },
 
