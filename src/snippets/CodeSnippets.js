@@ -237,14 +237,23 @@ using System.Linq;
 using System.Collections.Generic;
 
 public class Program {
-    public record User(int Id, string Name, int Score);
+    public class User {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public int Score { get; set; }
+        public User(int id, string name, int score) {
+            Id = id;
+            Name = name;
+            Score = score;
+        }
+    }
 
     public static void Main() {
         Console.WriteLine("--- PolyCompile: C# .NET OOP Execution ---");
         var users = new List<User> {
-            new(1, "Alice", 95),
-            new(2, "Bob", 82),
-            new(3, "Charlie", 99)
+            new User(1, "Alice", 95),
+            new User(2, "Bob", 82),
+            new User(3, "Charlie", 99)
         };
 
         var topUsers = users.Where(u => u.Score >= 90).OrderByDescending(u => u.Score);

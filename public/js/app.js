@@ -811,9 +811,11 @@ document.addEventListener('DOMContentLoaded', () => {
       interactiveSocket = null;
     }
     terminalFinished = true;
-    if (terminalInput) terminalInput.disabled = true;
-    const send = terminalInputRow?.querySelector('button');
-    if (send) send.disabled = true;
+    if (terminalInputRow) {
+      terminalInputRow.remove();
+      terminalInputRow = null;
+      terminalInput = null;
+    }
   }
 
   function sourceReadsStdin(source, languageId) {
@@ -1134,11 +1136,14 @@ document.addEventListener('DOMContentLoaded', () => {
           else if (message.code === 0) {
             terminalWrite('\n[✓ Process finished with exit code 0]\n', 'terminal-success');
             if (!terminalProgramOutputSeen) terminalWrite('Program executed successfully. No output generated.\n', 'terminal-system');
-          } else terminalWrite(`\n[✗ Process exited with code ${message.code}]\n`, 'stderr-chunk');
-          terminalWrite(`\n[Process exited with code ${message.code}]\n`, 'terminal-system');
-          if (terminalInput) terminalInput.disabled = true;
-          const send = terminalInputRow?.querySelector('.terminal-send-button');
-          if (send) send.disabled = true;
+          } else {
+            terminalWrite(`\n[✗ Process exited with code ${message.code}]\n`, 'stderr-chunk');
+          }
+          if (terminalInputRow) {
+            terminalInputRow.remove();
+            terminalInputRow = null;
+            terminalInput = null;
+          }
           if (message.code === 0) showToast('Program completed successfully.', 'success');
           else showToast(`Program exited with code ${message.code}.`, 'error');
           setLoadingState(false);
@@ -1175,12 +1180,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (!terminalFinished) {
           terminalFinished = true;
-          if (terminalInput) {
-            terminalInput.disabled = true;
-            terminalInput.placeholder = 'Session closed.';
+          if (terminalInputRow) {
+            terminalInputRow.remove();
+            terminalInputRow = null;
+            terminalInput = null;
           }
-          const send = terminalInputRow?.querySelector('.terminal-send-button');
-          if (send) send.disabled = true;
         }
         interactiveSocket = null;
       };

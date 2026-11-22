@@ -115,7 +115,6 @@ class SandboxClient {
     cobol: 77,         // COBOL (GnuCOBOL 3.1.2)
     d: 56,             // D (DMD 2.091.0)
     erlang: 58,        // Erlang (OTP 22.2)
-    scheme: 74,        // Scheme (Gauche 0.9.9)
     octave: 66,        // Octave (5.1.0)
     dart: 90,          // Dart (2.19.2)
     groovy: 88,        // Groovy (3.0.3)
@@ -155,7 +154,7 @@ class SandboxClient {
     bash: 'bash',
     zsh: 'bash',
     dash: 'bash',
-    zig: 'zig-head',
+    zig: 'zig-0.13.0',
     sql: 'sqlite-3.46.1',
     d: 'dmd-2.109.1',
     nim: 'nim-2.2.10',
