@@ -686,7 +686,12 @@ document.addEventListener('DOMContentLoaded', () => {
       xtermInstance.focus();
       return { disabled: false, placeholder: '', focus: () => xtermInstance.focus(), value: '' };
     }
-    if (terminalInputRow && terminalInputRow.isConnected) return terminalInput;
+    if (terminalInputRow && terminalInputRow.isConnected) {
+      if (terminalInput) terminalInput.disabled = false;
+      const btn = terminalInputRow.querySelector('.terminal-send-button');
+      if (btn) btn.disabled = false;
+      return terminalInput;
+    }
     const row = document.createElement('form');
     row.className = 'interactive-terminal-input-row';
     const prompt = document.createElement('span');
@@ -699,8 +704,14 @@ document.addEventListener('DOMContentLoaded', () => {
     input.spellcheck = false;
     input.setAttribute('aria-label', 'Program standard input');
     input.placeholder = 'Type input and press Enter…';
-    // Keep a single shell-like prompt line; Enter submits directly.
-    row.append(prompt, input);
+
+    const sendBtn = document.createElement('button');
+    sendBtn.type = 'submit';
+    sendBtn.className = 'terminal-send-button';
+    sendBtn.title = 'Send input (Enter)';
+    sendBtn.innerHTML = '<i class="fa-solid fa-arrow-turn-down fa-rotate-90"></i> Send';
+
+    row.append(prompt, input, sendBtn);
     terminalInputRow = row;
     terminalInput = input;
     consoleOutput.appendChild(row);
@@ -717,6 +728,7 @@ document.addEventListener('DOMContentLoaded', () => {
               input.disabled = true;
               input.placeholder = 'Program finished.';
             }
+            sendBtn.disabled = true;
             terminalWrite('\n[Connection closed. Click Run to execute again.]\n', 'terminal-system');
             setLoadingState(false);
             clearTimeoutBar();
@@ -1009,8 +1021,17 @@ document.addEventListener('DOMContentLoaded', () => {
       wsUrl.searchParams.set('ticket', ticketData.ticket);
       interactiveSocket = new WebSocket(wsUrl.toString());
 
+      let heartbeatInterval = null;
       interactiveSocket.onopen = () => {
         if (!interactiveSocket) return;
+        heartbeatInterval = setInterval(() => {
+          if (interactiveSocket && interactiveSocket.readyState === WebSocket.OPEN) {
+            try { interactiveSocket.send(JSON.stringify({ type: 'ping' })); } catch {}
+          } else {
+            clearInterval(heartbeatInterval);
+          }
+        }, 10_000);
+
         const customStdinVal = (customStdin && customStdin.value) ? customStdin.value : '';
         interactiveSocket.send(JSON.stringify({
           type: 'start',
@@ -1025,6 +1046,19 @@ document.addEventListener('DOMContentLoaded', () => {
       interactiveSocket.onmessage = event => {
         let message;
         try { message = JSON.parse(event.data); } catch (_) { return; }
+        if (message.type === 'ping') {
+          if (interactiveSocket && interactiveSocket.readyState === WebSocket.OPEN) {
+            try { interactiveSocket.send(JSON.stringify({ type: 'pong' })); } catch {}
+          }
+          return;
+        }
+        if (message.type === 'pong') return;
+        if (message.type === 'ack') {
+          const inp = ensureTerminalInput();
+          inp.disabled = false;
+          inp.focus();
+          return;
+        }
         if (message.type === 'compiling') {
           setLoadingState(true, 'Compiling…');
           terminalWrite(`[Compiling ${message.language || currentLang}...]\n`, 'terminal-system');
@@ -1043,6 +1077,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (message.type === 'stdout') {
           if (message.phase !== 'compile' && message.data) terminalProgramOutputSeen = true;
           terminalWrite(message.data || '', message.phase === 'compile' ? 'compile-output-chunk' : 'stdout-chunk');
+          const inp = ensureTerminalInput();
+          inp.disabled = false;
+          inp.focus();
         } else if (message.type === 'stderr') {
           if (message.phase !== 'compile' && message.data) terminalProgramOutputSeen = true;
           if (message.phase === 'compile' && !terminalCompileErrorShown) {
@@ -1092,7 +1129,7 @@ document.addEventListener('DOMContentLoaded', () => {
           } else terminalWrite(`\n[✗ Process exited with code ${message.code}]\n`, 'stderr-chunk');
           terminalWrite(`\n[Process exited with code ${message.code}]\n`, 'terminal-system');
           if (terminalInput) terminalInput.disabled = true;
-          const send = terminalInputRow?.querySelector('button');
+          const send = terminalInputRow?.querySelector('.terminal-send-button');
           if (send) send.disabled = true;
           if (message.code === 0) showToast('Program completed successfully.', 'success');
           else showToast(`Program exited with code ${message.code}.`, 'error');
@@ -1109,6 +1146,7 @@ document.addEventListener('DOMContentLoaded', () => {
       };
 
       interactiveSocket.onerror = () => {
+        clearInterval(heartbeatInterval);
         if (!terminalFinished) terminalWrite('\nUnable to connect to compiler service.\n', 'stderr-chunk');
         terminalFinished = true;
         setLoadingState(false);
@@ -1116,9 +1154,15 @@ document.addEventListener('DOMContentLoaded', () => {
         clearTimeoutBar();
       };
       interactiveSocket.onclose = () => {
+        clearInterval(heartbeatInterval);
         if (isRunning) {
           setLoadingState(false);
-          if (!terminalFinished) setRunButtonResult(false);
+          if (!terminalFinished) {
+            runBtn.disabled = false;
+            runBtn.classList.remove('run-success', 'run-failed');
+            runBtnIcon.className = 'fa-solid fa-play';
+            runBtnText.innerHTML = 'Run &amp; Compile';
+          }
           clearTimeoutBar();
         }
         if (!terminalFinished) {
@@ -1127,6 +1171,8 @@ document.addEventListener('DOMContentLoaded', () => {
             terminalInput.disabled = true;
             terminalInput.placeholder = 'Session closed.';
           }
+          const send = terminalInputRow?.querySelector('.terminal-send-button');
+          if (send) send.disabled = true;
         }
         interactiveSocket = null;
       };

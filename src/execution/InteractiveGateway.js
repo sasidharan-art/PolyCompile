@@ -36,10 +36,30 @@ function isDockerAvailable() {
 
 function findExecutable(names) {
   const list = Array.isArray(names) ? names : [names];
-  const checker = process.platform === 'win32' ? 'where.exe' : 'which';
+  const pathDirs = (process.env.PATH || '').split(path.delimiter).map(s => s.trim()).filter(Boolean);
+  const commonDirs = process.platform === 'win32'
+    ? []
+    : ['/usr/bin', '/usr/local/bin', '/bin', '/usr/sbin', '/opt/homebrew/bin'];
+  const allDirs = [...new Set([...pathDirs, ...commonDirs])];
+
   for (const name of list) {
     if (!name || typeof name !== 'string') continue;
     if (process.platform === 'win32' && ['sh', 'bash', 'zsh', 'fish', 'script'].includes(name)) continue;
+    if (name.includes('/') || name.includes('\\')) {
+      try {
+        if (fs.existsSync(name)) return name;
+      } catch {}
+    }
+    for (const dir of allDirs) {
+      try {
+        const full = path.join(dir, name);
+        if (fs.existsSync(full)) {
+          if (process.platform === 'win32' && full.includes('WindowsApps')) continue;
+          return full;
+        }
+      } catch {}
+    }
+    const checker = process.platform === 'win32' ? 'where.exe' : 'which';
     try {
       const res = spawnSync(checker, [name], { stdio: 'pipe', timeout: 1000 });
       if (res.status === 0 && res.stdout) {
@@ -50,11 +70,6 @@ function findExecutable(names) {
         }
       }
     } catch {}
-    if (process.platform !== 'win32' && name.startsWith('/')) {
-      try {
-        if (fs.existsSync(name)) return name;
-      } catch {}
-    }
   }
   return null;
 }
@@ -64,7 +79,62 @@ function prepareCloudSource(languageId, code) {
   const lang = (languageId || '').toLowerCase();
 
   if (lang === 'c') {
-    if (code.includes('scanf') && !code.includes('_pc_scanf_helper')) {
+    if (!code.includes('_pc_scanf_helper')) {
+      const helper = `
+#include <stdio.h>
+#include <stdlib.h>
+static inline int _pc_scanf_helper(int r) {
+  if (r == -1 || r == 0) {
+    fflush(stdout);
+    fprintf(stderr, "__PC_EOF__\\n");
+    exit(42);
+  }
+  return r;
+}
+#define scanf(...) _pc_scanf_helper(scanf(__VA_ARGS__))
+
+static inline char* _pc_fgets_helper(char *s, int size, FILE *stream) {
+  char *r = fgets(s, size, stream);
+  if (!r) {
+    fflush(stdout);
+    fprintf(stderr, "__PC_EOF__\\n");
+    exit(42);
+  }
+  return r;
+}
+#define fgets(...) _pc_fgets_helper(__VA_ARGS__)
+
+static inline int _pc_getchar_helper(void) {
+  int c = getchar();
+  if (c == EOF) {
+    fflush(stdout);
+    fprintf(stderr, "__PC_EOF__\\n");
+    exit(42);
+  }
+  return c;
+}
+#define getchar() _pc_getchar_helper()
+`;
+      return helper + '\n' + code;
+    }
+  }
+
+  if (lang === 'cpp' || lang === 'c++') {
+    let result = code;
+    if (code.includes('cin') && !code.includes('_PcIoInit') && !/while\s*\(\s*(std::)?cin/.test(code)) {
+      const helper = `
+#include <ios>
+#include <iostream>
+struct _PcIoInit {
+  _PcIoInit() {
+    try { std::cin.exceptions(std::ios_base::badbit | std::ios_base::failbit | std::ios_base::eofbit); } catch(...) {}
+  }
+};
+static _PcIoInit _pc_io_init;
+`;
+      result = helper + '\n' + result;
+    }
+    if (code.includes('scanf') && !result.includes('_pc_scanf_helper')) {
       const helper = `
 #include <stdio.h>
 #include <stdlib.h>
@@ -78,24 +148,9 @@ static inline int _pc_scanf_helper(int r) {
 }
 #define scanf(...) _pc_scanf_helper(scanf(__VA_ARGS__))
 `;
-      return helper + '\n' + code;
+      result = helper + '\n' + result;
     }
-  }
-
-  if (lang === 'cpp' || lang === 'c++') {
-    if (code.includes('cin') && !code.includes('_PcIoInit') && !/while\s*\(\s*(std::)?cin/.test(code)) {
-      const helper = `
-#include <ios>
-#include <iostream>
-struct _PcIoInit {
-  _PcIoInit() {
-    try { std::cin.exceptions(std::ios_base::badbit | std::ios_base::failbit | std::ios_base::eofbit); } catch(...) {}
-  }
-};
-static _PcIoInit _pc_io_init;
-`;
-      return helper + '\n' + code;
-    }
+    return result;
   }
 
   return code;
@@ -152,12 +207,14 @@ function setupInteractiveGateway(server) {
       }, INACTIVITY_TIMEOUT_MS);
     };
 
-    // Keep-alive heartbeat every 20 seconds to prevent cloud proxies (Render, Cloudflare) from closing idle connections
+    // Keep-alive heartbeat every 10 seconds to prevent cloud proxies (Render, Cloudflare) from closing idle connections
     pingInterval = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
-        try { ws.ping(); } catch {}
+        try {
+          ws.send(JSON.stringify({ type: 'ping', time: Date.now() }));
+        } catch {}
       }
-    }, 20_000);
+    }, 10_000);
 
     const send = payload => {
       resetTimer();
@@ -192,6 +249,18 @@ function setupInteractiveGateway(server) {
         msg = JSON.parse(raw.toString('utf8'));
       } catch {
         send({ type: 'error', message: 'Invalid message.' });
+        return;
+      }
+
+      if (msg.type === 'ping') {
+        if (ws.readyState === WebSocket.OPEN) {
+          try { ws.send(JSON.stringify({ type: 'pong' })); } catch {}
+        }
+        resetTimer();
+        return;
+      }
+      if (msg.type === 'pong' || msg.type === 'heartbeat') {
+        resetTimer();
         return;
       }
 
@@ -448,16 +517,24 @@ function setupInteractiveGateway(server) {
             // Check if process is waiting for input (EOF encountered while reading)
             const isWaitingForInput =
               !res.success &&
-              (lowerErr.includes('__pc_eof__') ||
+              (res.exitCode === 42 ||
+               lowerErr.includes('__pc_eof__') ||
                lowerErr.includes('basic_ios') ||
                lowerErr.includes('iostream error') ||
                lowerErr.includes('eoferror') ||
                lowerErr.includes('eof') ||
                lowerErr.includes('nosuchelementexception') ||
+               lowerErr.includes('nullpointerexception') ||
+               lowerErr.includes('nullreferenceexception') ||
+               lowerErr.includes('argumentnullexception') ||
+               lowerErr.includes('nomethoderror') ||
+               lowerErr.includes('nilclass') ||
                lowerErr.includes('ioerror') ||
                lowerErr.includes('broken pipe'));
 
-            if (!isWaitingForInput) {
+            if (isWaitingForInput) {
+              send({ type: 'ack', waitingForInput: true });
+            } else {
               cloudFinished = true;
               if (res.compileOutput) {
                 send({ type: 'stderr', data: res.compileOutput + (res.compileOutput.endsWith('\n') ? '' : '\n'), phase: 'compile' });
@@ -470,8 +547,10 @@ function setupInteractiveGateway(server) {
                 code: res.exitCode ?? (res.success ? 0 : 1),
                 durationMs: res.executionTimeMs || 0
               });
-              cleanup();
-              ws.close();
+              setTimeout(() => {
+                cleanup();
+                try { ws.close(); } catch {}
+              }, 60);
             }
           } catch (err) {
             cloudFinished = true;
@@ -501,6 +580,7 @@ function setupInteractiveGateway(server) {
           const data = typeof msg.data === 'string' ? msg.data : '';
           const line = data + (msg.newline === false ? '' : '\n');
           resetTimer();
+          send({ type: 'ack', receivingInput: true });
           if (isCloudExecuting) {
             cloudInputQueue.push(line);
           } else {
