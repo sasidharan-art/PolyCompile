@@ -84,7 +84,7 @@ function prepareCloudSource(languageId, code) {
 #include <stdio.h>
 #include <stdlib.h>
 static inline int _pc_scanf_helper(int r) {
-  if (r == -1 || r == 0) {
+  if (r == -1 || r == 0 || feof(stdin)) {
     fflush(stdout);
     fprintf(stderr, "__PC_EOF__\\n");
     exit(42);
@@ -95,7 +95,7 @@ static inline int _pc_scanf_helper(int r) {
 
 static inline char* _pc_fgets_helper(char *s, int size, FILE *stream) {
   char *r = fgets(s, size, stream);
-  if (!r) {
+  if (!r || (stream == stdin && feof(stdin) && (s == NULL || s[0] == '\0'))) {
     fflush(stdout);
     fprintf(stderr, "__PC_EOF__\\n");
     exit(42);
@@ -106,7 +106,7 @@ static inline char* _pc_fgets_helper(char *s, int size, FILE *stream) {
 
 static inline int _pc_getchar_helper(void) {
   int c = getchar();
-  if (c == EOF) {
+  if (c == EOF || feof(stdin)) {
     fflush(stdout);
     fprintf(stderr, "__PC_EOF__\\n");
     exit(42);
@@ -139,7 +139,7 @@ static _PcIoInit _pc_io_init;
 #include <stdio.h>
 #include <stdlib.h>
 static inline int _pc_scanf_helper(int r) {
-  if (r == -1 || r == 0) {
+  if (r == -1 || r == 0 || feof(stdin)) {
     fflush(stdout);
     fprintf(stderr, "__PC_EOF__\\n");
     exit(42);
@@ -530,6 +530,11 @@ function setupInteractiveGateway(server) {
                lowerErr.includes('nomethoderror') ||
                lowerErr.includes('nilclass') ||
                lowerErr.includes('ioerror') ||
+               lowerErr.includes('unexpectedly found nil') ||
+               lowerErr.includes('end of file') ||
+               lowerErr.includes('end-of-file') ||
+               lowerErr.includes('runtime error 106') ||
+               lowerErr.includes('runtime error 107') ||
                lowerErr.includes('broken pipe'));
 
             if (isWaitingForInput) {
@@ -570,8 +575,9 @@ function setupInteractiveGateway(server) {
           } finally {
             isCloudExecuting = false;
             if (cloudInputQueue.length > 0 && !cloudFinished) {
-              const nextInput = cloudInputQueue.shift();
-              accumulatedStdin += nextInput;
+              while (cloudInputQueue.length > 0) {
+                accumulatedStdin += cloudInputQueue.shift();
+              }
               setImmediate(processCloudQueue);
             }
           }
