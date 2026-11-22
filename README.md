@@ -94,21 +94,6 @@ PolyCompile is an end-to-end cloud-native compiler and runtime system engineered
 ## 3. Universal Input / Output Engine
 
 The platform is completely generalized and language-independent. The execution engine does not evaluate the semantic meaning of inputs; it transports arbitrary bytes, encoded characters, and EOF signals natively.
-
-### 3.1 Input Formats Fully Supported & Validated
-
-| Input Category | Example Pattern | Handling Mechanism |
-|---|---|---|
-| **Single Integer** | `cin >> age;` / `scanf("%d")` | Program prints prompt, halts on EOF helper, accepts typed value, echoes inline, resumes execution. |
-| **Multiple Space-Separated Integers** | `cin >> a >> b >> c;` | Reads all tokens from single line buffer (`10 20 30`); remaining tokens persist in stdin stream. |
-| **Line-by-Line Inputs** | Sequential `input()` calls in loops | Iterative state turns; user submits each line with `Enter` or `Send ↵` button without losing context. |
-| **Strings with Spaces & Punctuation** | Full name (`Surya Kumar 🚀`) | Buffer preserves whitespace, symbols, emojis, and escapes without truncation. |
-| **Multidimensional Matrices** | 3x3 / NxM Matrix Multiplication | Handles row-by-row inputs, dimension validations, and matrix multiplication condition checks cleanly. |
-| **Graph & Tree Algorithms** | Dijkstra shortest paths, heaps | Processes vertex/edge numbers, adjacency pairs, and starting nodes interactively. |
-| **Competitive Programming Blocks** | Multiple test cases ($T$ cases, $N$ lines) | Mode B Custom Stdin allows pasting 1,000+ lines upfront for instant one-shot processing. |
-
----
-
 ## 4. Comprehensive 70-Language Compatibility
 
 PolyCompile supports 70 programming languages across 7 foundational computing paradigms. Each language is registered with syntax patterns, default extensions, execution commands, and compiler flags.
